@@ -1,5 +1,3 @@
-// TODO [FE2-05a] @Elena - Prenosi: Forma za prenos izmedju racuna
-// TODO [FE2-05b] @Elena - Prenosi: Verifikacija prenosa
 // TODO [FE2-08a] @Antonije - Transferi: Kreiranje transfera
 // TODO [FE2-08b] @Antonije - Transferi: Istorija i prikaz kursa/provizije
 //
@@ -36,22 +34,47 @@ function formatAmount(value: number | null | undefined, decimals = 2): string {
   return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof (error as { response?: unknown }).response === 'object' &&
+    (error as { response?: unknown }).response !== null
+  ) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    if (response?.data?.message) {
+      return response.data.message;
+    }
+  }
+
+  return fallback;
+}
+
 export default function TransferPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
   const preselectedFrom = searchParams.get('from') || '';
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [showVerification, setShowVerification] = useState(false);
   const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
-  const [exchangePreview, setExchangePreview] = useState<{ rate: number; convertedAmount: number } | null>(null);
+
+  const [exchangePreview, setExchangePreview] = useState<{
+    rate: number;
+    convertedAmount: number;
+  } | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
@@ -64,30 +87,53 @@ export default function TransferPage() {
 
   useEffect(() => {
     let mounted = true;
+
     const loadAccounts = async () => {
       setIsLoading(true);
+
       try {
         const data = await accountService.getMyAccounts();
+
         if (!mounted) return;
+
         const safeAccounts = asArray<Account>(data);
         setAccounts(safeAccounts);
-        if (!preselectedFrom && safeAccounts.length > 0) {
-          setValue('fromAccountNumber', safeAccounts[0].accountNumber);
+
+        if (safeAccounts.length === 0) {
+          toast.error('Nemate dostupnih računa za prenos.');
+          return;
         }
-      } catch {
+
+        const hasPreselected = safeAccounts.some(
+          (account) => account.accountNumber === preselectedFrom
+        );
+
+        const initialFrom =
+          preselectedFrom && hasPreselected ? preselectedFrom : safeAccounts[0].accountNumber;
+
+        reset({
+          fromAccountNumber: initialFrom,
+          toAccountNumber: '',
+          amount: 0,
+        });
+      } catch (error) {
         if (!mounted) return;
-        toast.error('Neuspešno učitavanje računa.');
+
+        toast.error(getErrorMessage(error, 'Neuspešno učitavanje računa.'));
         setAccounts([]);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadAccounts();
+
     return () => {
       mounted = false;
     };
-  }, [preselectedFrom, setValue]);
+  }, [preselectedFrom, reset]);
 
   const fromAccount = watch('fromAccountNumber');
   const toAccount = watch('toAccountNumber');
@@ -99,17 +145,26 @@ export default function TransferPage() {
     () => safeAccounts.find((account) => account.accountNumber === fromAccount),
     [safeAccounts, fromAccount]
   );
-  const toAccountData = useMemo(
-    () => safeAccounts.find((account) => account.accountNumber === toAccount),
-    [safeAccounts, toAccount]
-  );
 
   const toAccountOptions = useMemo(
     () => safeAccounts.filter((account) => account.accountNumber !== fromAccount),
     [safeAccounts, fromAccount]
   );
 
+  const toAccountData = useMemo(
+    () => toAccountOptions.find((account) => account.accountNumber === toAccount),
+    [toAccountOptions, toAccount]
+  );
+
   useEffect(() => {
+    if (toAccount && toAccount === fromAccount) {
+      setValue('toAccountNumber', '');
+    }
+  }, [fromAccount, toAccount, setValue]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     if (!fromAccountData || !toAccountData || !amount || amount <= 0) {
       setExchangePreview(null);
       return;
@@ -122,45 +177,104 @@ export default function TransferPage() {
 
     const loadRate = async () => {
       try {
-        const rate = await currencyService.getRate(fromAccountData.currency, toAccountData.currency);
+        const rate = await currencyService.getRate(
+          fromAccountData.currency,
+          toAccountData.currency
+        );
+
+        if (cancelled) return;
+
         setExchangePreview({
           rate: rate.middleRate,
           convertedAmount: amount * rate.middleRate,
         });
       } catch {
+        if (cancelled) return;
         setExchangePreview(null);
       }
     };
 
     loadRate();
+
+    return () => {
+      cancelled = true;
+    };
   }, [amount, fromAccountData, toAccountData]);
 
+  const insufficientFunds = useMemo(() => {
+    if (!fromAccountData) return false;
+    return amount > 0 && Number(fromAccountData.availableBalance ?? 0) < Number(amount);
+  }, [fromAccountData, amount]);
+
   const onSubmit = async (data: TransferFormData) => {
+    if (!fromAccountData) {
+      toast.error('Izaberite račun pošiljaoca.');
+      return;
+    }
+
+    if (!toAccountData) {
+      toast.error('Izaberite račun primaoca.');
+      return;
+    }
+
+    if (data.fromAccountNumber === data.toAccountNumber) {
+      toast.error('Račun pošiljaoca i primaoca ne mogu biti isti.');
+      return;
+    }
+
+    if (Number(data.amount) <= 0) {
+      toast.error('Iznos mora biti veći od nule.');
+      return;
+    }
+
+    if (insufficientFunds) {
+      toast.error('Nemate dovoljno raspoloživih sredstava na izabranom računu.');
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
-      const transfer = await transactionService.createTransfer(data);
+      const transfer = await transactionService.createTransfer({
+        fromAccountNumber: data.fromAccountNumber,
+        toAccountNumber: data.toAccountNumber,
+        amount: Number(data.amount),
+      });
+
       setPendingTransactionId(transfer.id);
       setShowVerification(true);
       toast.info('Prenos je kreiran. Potrebna je verifikacija.');
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Kreiranje prenosa nije uspelo.');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Kreiranje prenosa nije uspelo.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleVerificationClose = () => {
+    setShowVerification(false);
+  };
+
+  const handleVerificationSuccess = () => {
+    setShowVerification(false);
+    toast.success('Prenos je uspešno verifikovan.');
+    navigate('/accounts');
+  };
+
   return (
-    <div className="container mx-auto py-6 max-w-2xl">
-      <h1 className="text-3xl font-bold mb-6">Prenos između računa</h1>
+    <div className="container mx-auto max-w-2xl py-6">
+      <h1 className="mb-6 text-3xl font-bold">Prenos između računa</h1>
 
       <Card>
         <CardHeader>
           <CardTitle>Novi prenos</CardTitle>
         </CardHeader>
+
         <CardContent>
           {isLoading ? (
             <p className="text-muted-foreground">Učitavanje računa...</p>
+          ) : safeAccounts.length === 0 ? (
+            <p className="text-muted-foreground">Nemate dostupnih računa za prenos.</p>
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
               <div className="space-y-2">
@@ -170,16 +284,31 @@ export default function TransferPage() {
                   title="Račun pošiljaoca"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   {...register('fromAccountNumber')}
+                  disabled={isSubmitting}
                 >
                   <option value="">Izaberite račun</option>
                   {safeAccounts.map((account) => (
                     <option key={account.id} value={account.accountNumber}>
-                      {account.accountNumber} | {formatAmount(account.availableBalance)} {account.currency}
+                      {account.accountNumber} | {formatAmount(account.availableBalance)}{' '}
+                      {account.currency}
                     </option>
                   ))}
                 </select>
-                {errors.fromAccountNumber && <p className="text-sm text-destructive">{errors.fromAccountNumber.message}</p>}
+                {errors.fromAccountNumber && (
+                  <p className="text-sm text-destructive">
+                    {errors.fromAccountNumber.message}
+                  </p>
+                )}
               </div>
+
+              {fromAccountData && (
+                <div className="rounded-md border p-3 text-sm">
+                  <p>
+                    Raspoloživo stanje: {formatAmount(fromAccountData.availableBalance)}{' '}
+                    {fromAccountData.currency}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="toAccount">Račun primaoca</Label>
@@ -188,36 +317,69 @@ export default function TransferPage() {
                   title="Račun primaoca"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   {...register('toAccountNumber')}
+                  disabled={isSubmitting}
                 >
                   <option value="">Izaberite račun</option>
                   {toAccountOptions.map((account) => (
                     <option key={account.id} value={account.accountNumber}>
-                      {account.accountNumber} | {formatAmount(account.availableBalance)} {account.currency}
+                      {account.accountNumber} | {formatAmount(account.availableBalance)}{' '}
+                      {account.currency}
                     </option>
                   ))}
                 </select>
-                {errors.toAccountNumber && <p className="text-sm text-destructive">{errors.toAccountNumber.message}</p>}
+                {errors.toAccountNumber && (
+                  <p className="text-sm text-destructive">
+                    {errors.toAccountNumber.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="amount">Iznos</Label>
-                <Input id="amount" type="number" step="0.01" {...register('amount', { valueAsNumber: true })} />
-                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                <Input
+                  id="amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...register('amount', { valueAsNumber: true })}
+                  disabled={isSubmitting}
+                />
+                {errors.amount && (
+                  <p className="text-sm text-destructive">{errors.amount.message}</p>
+                )}
+                {insufficientFunds && (
+                  <p className="text-sm text-destructive">
+                    Nemate dovoljno raspoloživih sredstava na računu pošiljaoca.
+                  </p>
+                )}
               </div>
 
               {exchangePreview && fromAccountData && toAccountData && (
-                <div className="rounded-md border p-3 text-sm space-y-1">
+                <div className="space-y-1 rounded-md border p-3 text-sm">
                   <p>
-                    Kurs: 1 {fromAccountData.currency} = {formatAmount(exchangePreview.rate, 4)} {toAccountData.currency}
+                    Kurs: 1 {fromAccountData.currency} = {formatAmount(exchangePreview.rate, 4)}{' '}
+                    {toAccountData.currency}
                   </p>
                   <p>
-                    Konvertovani iznos: {formatAmount(exchangePreview.convertedAmount)} {toAccountData.currency}
+                    Konvertovani iznos: {formatAmount(exchangePreview.convertedAmount)}{' '}
+                    {toAccountData.currency}
                   </p>
                 </div>
               )}
 
+              {fromAccountData &&
+                toAccountData &&
+                fromAccountData.currency === toAccountData.currency &&
+                amount > 0 && (
+                  <div className="space-y-1 rounded-md border p-3 text-sm">
+                    <p>
+                      Prenos bez konverzije: {formatAmount(amount)} {fromAccountData.currency}
+                    </p>
+                  </div>
+                )}
+
               <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || isLoading}>
                   {isSubmitting ? 'Kreiranje...' : 'Nastavi na verifikaciju'}
                 </Button>
               </div>
@@ -229,13 +391,9 @@ export default function TransferPage() {
       <VerificationModal
         transactionId={pendingTransactionId}
         isOpen={showVerification}
-        onClose={() => setShowVerification(false)}
-        onSuccess={() => {
-          setShowVerification(false);
-          navigate('/accounts');
-        }}
+        onClose={handleVerificationClose}
+        onSuccess={handleVerificationSuccess}
       />
     </div>
   );
 }
-

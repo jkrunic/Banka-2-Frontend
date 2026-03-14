@@ -1,13 +1,4 @@
-
-// TODO [FE2-09b] @Antonije - Menjacnica: Kalkulator konverzije
-//
-// Ova stranica prikazuje kursnu listu i omogucava konverziju valuta.
-// - currencyService.getExchangeRates() za kursnu listu
-// - currencyService.convert() za konverziju
-// - Tabela kurseva: valuta, kupovni, prodajni, srednji kurs
-// - Forma za konverziju: iz valute, u valutu, iznos => prikaz rezultata
-// - Spec: "Menjacnica" iz Celine 2
-// - Bazna valuta: RSD
+// FE2-09a/09b: Kursna lista i kalkulator konverzije
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -122,6 +113,10 @@ export default function ExchangePage() {
   }, [setValue]);
 
   const fromCurrency = watch('fromCurrency');
+  const toCurrency = watch('toCurrency');
+  const amount = watch('amount');
+  const accountNumber = watch('accountNumber');
+
   const safeAccounts = useMemo(() => asArray<Account>(accounts), [accounts]);
   const eligibleAccounts = useMemo(
     () => safeAccounts.filter((account) => account.currency === fromCurrency),
@@ -136,7 +131,17 @@ export default function ExchangePage() {
     }
   }, [eligibleAccounts, setValue]);
 
+  useEffect(() => {
+    setResult(null);
+  }, [fromCurrency, toCurrency, amount, accountNumber]);
+
   const onSubmit = async (data: ExchangeFormData) => {
+    if (data.fromCurrency === data.toCurrency) {
+      toast.error('Valute moraju biti razlicite.');
+      setResult(null);
+      return;
+    }
+
     try {
       const conversion = await currencyService.convert({
         fromCurrency: data.fromCurrency as never,
@@ -147,6 +152,7 @@ export default function ExchangePage() {
       setResult(conversion);
     } catch {
       toast.error('Konverzija nije uspela.');
+      setResult(null);
     }
   };
 
@@ -235,6 +241,11 @@ export default function ExchangePage() {
                 </select>
                 {errors.toCurrency && (
                   <p className="text-sm text-destructive">{errors.toCurrency.message}</p>
+                )}
+                {fromCurrency === toCurrency && (
+                  <p className="text-sm text-destructive">
+                    Izvorna i ciljna valuta ne mogu biti iste.
+                  </p>
                 )}
               </div>
 

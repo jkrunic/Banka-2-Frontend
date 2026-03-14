@@ -1,47 +1,80 @@
-// TODO [FE2-03a] @Jovan - Detaljan prikaz racuna - licni
-//
-// Ova stranica prikazuje detalje jednog racuna (tekuci ili devizni).
-// - useParams() za accountId iz URL-a
-// - accountService.getById(id) za fetch racuna
-// - transactionService.getAll({ accountNumber }) za poslednjih N transakcija
-// - Prikaz: naziv, broj, tip, podvrsta (accountSubtype), valuta, stanje, raspolozivo stanje,
-//   rezervisana sredstva, dnevni/mesecni limit, dnevna/mesecna potrosnja, status, datum kreiranja
-// - Lista poslednjih transakcija za ovaj racun
-// - Dugme za promenu naziva racuna (accountService.updateName, schema: accountRenameSchema)
-// - Dugme za promenu limita (accountService.changeLimit, schema: accountLimitSchema)
-//   => modal sa dnevni limit i mesecni limit, zahteva verifikaciju (VerificationModal)
+// FE2-03a: Detaljan prikaz licnog racuna (tekuci/devizni)
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Loader2,
+  Pencil,
+  CreditCard,
+  ArrowLeftRight,
+  History,
+} from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { accountService } from '@/services/accountService';
 import { transactionService } from '@/services/transactionService';
 import type { Account, Transaction } from '@/types/celina2';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-function statusClass(status: string): string {
-  if (status === 'ACTIVE') return 'bg-green-100 text-green-700';
-  if (status === 'BLOCKED') return 'bg-red-100 text-red-700';
-  return 'bg-muted text-muted-foreground';
+const accountTypeLabels: Record<string, string> = {
+  TEKUCI: 'Tekuci',
+  DEVIZNI: 'Devizni',
+  POSLOVNI: 'Poslovni',
+};
+
+const statusLabels: Record<string, string> = {
+  ACTIVE: 'Aktivan',
+  BLOCKED: 'Blokiran',
+  INACTIVE: 'Neaktivan',
+};
+
+const statusVariant: Record<string, 'success' | 'destructive' | 'secondary'> = {
+  ACTIVE: 'success',
+  BLOCKED: 'destructive',
+  INACTIVE: 'secondary',
+};
+
+const txStatusLabels: Record<string, string> = {
+  PENDING: 'Na cekanju',
+  COMPLETED: 'Zavrsena',
+  REJECTED: 'Odbijena',
+  CANCELLED: 'Otkazana',
+};
+
+const txStatusVariant: Record<string, 'warning' | 'success' | 'destructive' | 'secondary'> = {
+  PENDING: 'warning',
+  COMPLETED: 'success',
+  REJECTED: 'destructive',
+  CANCELLED: 'secondary',
+};
+
+function formatBalance(amount: number, currency: string): string {
+  return `${amount.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
 function formatAccountNumber(accountNumber: string): string {
   if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 7)}-${accountNumber.slice(7, 16)}-${accountNumber.slice(16)}`;
+  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
 }
 
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('sr-RS');
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export default function AccountDetailsPage() {
@@ -77,9 +110,9 @@ export default function AccountDetailsPage() {
           page: 0,
           limit: 10,
         });
-        setTransactions(transactionsResponse.content);
+        setTransactions(Array.isArray(transactionsResponse.content) ? transactionsResponse.content : []);
       } catch {
-        toast.error('Neuspešno učitavanje detalja računa.');
+        toast.error('Greska pri ucitavanju detalja racuna.');
       } finally {
         setLoading(false);
       }
@@ -102,7 +135,7 @@ export default function AccountDetailsPage() {
     if (!account) return;
     const newName = renameValue.trim();
     if (!newName) {
-      toast.error('Naziv računa ne sme biti prazan.');
+      toast.error('Naziv racuna ne sme biti prazan.');
       return;
     }
 
@@ -110,7 +143,7 @@ export default function AccountDetailsPage() {
     try {
       const updated = await accountService.updateName(account.id, newName);
       setAccount(updated);
-      toast.success('Naziv računa je uspešno promenjen.');
+      toast.success('Naziv racuna je uspesno promenjen.');
     } catch {
       toast.error('Promena naziva nije uspela.');
     } finally {
@@ -134,7 +167,7 @@ export default function AccountDetailsPage() {
         monthlyLimit: parsedMonthly,
       });
       setAccount({ ...account, dailyLimit: parsedDaily, monthlyLimit: parsedMonthly });
-      toast.success('Limiti su uspešno sačuvani.');
+      toast.success('Limiti su uspesno sacuvani.');
     } catch {
       toast.error('Promena limita nije uspela.');
     } finally {
@@ -142,127 +175,203 @@ export default function AccountDetailsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!account) {
+    return (
+      <div className="container mx-auto py-6 space-y-4">
+        <Button variant="ghost" onClick={() => navigate('/accounts')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Nazad na racune
+        </Button>
+        <p className="text-muted-foreground">Racun nije pronadjen.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {loading || !account ? (
-        <p className="text-muted-foreground">Učitavanje detalja računa...</p>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold">{account.name || 'Detalji računa'}</h1>
-            <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass(account.status)}`}>{account.status}</span>
-            <span className="px-2 py-1 rounded text-xs bg-muted">{account.accountType}</span>
+    <div className="space-y-6">
+      {/* Back button */}
+      <Button variant="ghost" size="sm" onClick={() => navigate('/accounts')}>
+        <ArrowLeft className="mr-2 h-4 w-4" /> Nazad na racune
+      </Button>
+
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl font-bold">{account.name || 'Detalji racuna'}</h1>
+        <Badge variant={statusVariant[account.status]}>
+          {statusLabels[account.status] || account.status}
+        </Badge>
+        <Badge variant="info">
+          {accountTypeLabels[account.accountType] || account.accountType}
+        </Badge>
+      </div>
+      <p className="text-muted-foreground">{formatAccountNumber(account.accountNumber)}</p>
+
+      {/* Balance card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Stanje racuna</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Ukupno stanje</p>
+              <p className="text-xl font-semibold">{formatBalance(account.balance, account.currency)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Raspolozivo</p>
+              <p className="text-xl font-semibold">{formatBalance(account.availableBalance, account.currency)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Rezervisano</p>
+              <p className="text-lg font-medium text-muted-foreground">{formatBalance(account.reservedBalance, account.currency)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Odrzavanje</p>
+              <p className="text-lg font-medium text-muted-foreground">{formatBalance(account.maintenanceFee, account.currency)}</p>
+            </div>
           </div>
-          <p className="text-muted-foreground">{formatAccountNumber(account.accountNumber)}</p>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Stanje računa</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 md:grid-cols-2 text-sm">
-              <p>Stanje: <span className="font-medium">{formatAmount(account.balance)} {account.currency}</span></p>
-              <p>Raspoloživo: <span className="font-medium">{formatAmount(account.availableBalance)} {account.currency}</span></p>
-              <p>Rezervisano: <span className="font-medium">{formatAmount(account.reservedBalance)} {account.currency}</span></p>
-              <p>Podvrsta: <span className="font-medium">{account.accountSubtype || '-'}</span></p>
-            </CardContent>
-          </Card>
+      {/* Limits card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Limiti i potrosnja</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span>Dnevna potrosnja</span>
+              <span className="font-medium">
+                {formatBalance(account.dailySpending, account.currency)} / {formatBalance(account.dailyLimit, account.currency)}
+              </span>
+            </div>
+            <Progress value={dailyProgress} className="h-2" />
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span>Mesecna potrosnja</span>
+              <span className="font-medium">
+                {formatBalance(account.monthlySpending, account.currency)} / {formatBalance(account.monthlyLimit, account.currency)}
+              </span>
+            </div>
+            <Progress value={monthlyProgress} className="h-2" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="dailyLimit">Novi dnevni limit</Label>
+              <Input id="dailyLimit" type="number" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="monthlyLimit">Novi mesecni limit</Label>
+              <Input id="monthlyLimit" type="number" value={monthlyLimit} onChange={(e) => setMonthlyLimit(e.target.value)} />
+            </div>
+          </div>
+          <Button onClick={saveLimits} disabled={isSavingLimits}>
+            {isSavingLimits ? 'Cuvanje...' : 'Sacuvaj limite'}
+          </Button>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Limiti i potrošnja</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div>
-                <p>Dnevni limit / potrošnja: {formatAmount(account.dailyLimit)} / {formatAmount(account.dailySpending)} {account.currency}</p>
-                <progress className="w-full h-2" max={100} value={dailyProgress} />
-              </div>
-              <div>
-                <p>Mesečni limit / potrošnja: {formatAmount(account.monthlyLimit)} / {formatAmount(account.monthlySpending)} {account.currency}</p>
-                <progress className="w-full h-2" max={100} value={monthlyProgress} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="dailyLimit">Novi dnevni limit</Label>
-                  <Input id="dailyLimit" type="number" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="monthlyLimit">Novi mesečni limit</Label>
-                  <Input id="monthlyLimit" type="number" value={monthlyLimit} onChange={(e) => setMonthlyLimit(e.target.value)} />
-                </div>
-              </div>
-              <Button onClick={saveLimits} disabled={isSavingLimits}>
-                {isSavingLimits ? 'Čuvanje...' : 'Sačuvaj limite'}
-              </Button>
-            </CardContent>
-          </Card>
+      {/* Actions card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Akcije</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-muted-foreground" />
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Novi naziv racuna"
+              className="max-w-sm"
+            />
+            <Button onClick={saveName} disabled={isSavingName}>
+              {isSavingName ? 'Cuvanje...' : 'Promeni naziv'}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => navigate(`/payments/new?from=${account.accountNumber}`)}>
+              <CreditCard className="mr-2 h-4 w-4" /> Novo placanje
+            </Button>
+            <Button variant="outline" onClick={() => navigate(`/transfers?from=${account.accountNumber}`)}>
+              <ArrowLeftRight className="mr-2 h-4 w-4" /> Prenos
+            </Button>
+            <Button variant="outline" onClick={() => navigate(`/payments/history?account=${account.accountNumber}`)}>
+              <History className="mr-2 h-4 w-4" /> Sve transakcije
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Akcije</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-                <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="Novi naziv računa" />
-                <Button onClick={saveName} disabled={isSavingName}>{isSavingName ? 'Čuvanje...' : 'Promeni naziv'}</Button>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => navigate(`/payments/new?from=${account.accountNumber}`)}>
-                  Novo plaćanje
-                </Button>
-                <Button variant="outline" onClick={() => navigate(`/transfers?from=${account.accountNumber}`)}>
-                  Prenos
-                </Button>
-                <Button variant="outline" onClick={() => navigate(`/payments/history?account=${account.accountNumber}`)}>
-                  Vidi sve transakcije
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Poslednje transakcije</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {transactions.length === 0 ? (
-                <p className="text-muted-foreground">Nema transakcija za ovaj račun.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Datum</th>
-                        <th className="text-left py-2">Opis</th>
-                        <th className="text-left py-2">Primalac/pošiljalac</th>
-                        <th className="text-left py-2">Iznos</th>
-                        <th className="text-left py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {transactions.map((transaction) => {
-                        const counterparty =
-                          transaction.fromAccountNumber === account.accountNumber
-                            ? transaction.toAccountNumber
-                            : transaction.fromAccountNumber;
-                        return (
-                          <tr key={transaction.id} className="border-b">
-                            <td className="py-2">{formatDateTime(transaction.createdAt)}</td>
-                            <td className="py-2">{transaction.description || transaction.paymentPurpose}</td>
-                            <td className="py-2">{counterparty}</td>
-                            <td className="py-2">{formatAmount(transaction.amount)} {transaction.currency}</td>
-                            <td className="py-2">{transaction.status}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+      {/* Recent transactions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Poslednje transakcije</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {transactions.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">Nema transakcija za ovaj racun.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40px]"></TableHead>
+                  <TableHead>Datum</TableHead>
+                  <TableHead>Primalac / Posiljalac</TableHead>
+                  <TableHead>Svrha</TableHead>
+                  <TableHead className="text-right">Iznos</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((tx) => {
+                  const isOutgoing = tx.fromAccountNumber === account.accountNumber;
+                  return (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        {isOutgoing ? (
+                          <ArrowUpRight className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(tx.createdAt)}</TableCell>
+                      <TableCell>
+                        {tx.recipientName || '—'}
+                        <span className="block text-xs text-muted-foreground">
+                          {isOutgoing
+                            ? formatAccountNumber(tx.toAccountNumber)
+                            : formatAccountNumber(tx.fromAccountNumber)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={tx.paymentPurpose}>
+                        {tx.paymentPurpose}
+                      </TableCell>
+                      <TableCell className={`text-right font-medium whitespace-nowrap ${isOutgoing ? 'text-destructive' : 'text-green-600'}`}>
+                        {isOutgoing ? '−' : '+'}{formatBalance(tx.amount, tx.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={txStatusVariant[tx.status]}>
+                          {txStatusLabels[tx.status] || tx.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

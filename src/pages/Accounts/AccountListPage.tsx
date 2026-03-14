@@ -1,204 +1,253 @@
-// TODO [FE2-02a] @Jovan - Racuni: Lista svih racuna korisnika
-// TODO [FE2-02b] @Jovan - Racuni: Lista transakcija za selektovani racun
-//
-// Ova stranica prikazuje sve racune ulogovanog korisnika.
-// - accountService.getMyAccounts() za fetch
-// - Kartice/tabela sa: naziv, broj racuna, tip (tekuci/devizni/poslovni), valuta, stanje, status
-// - Klik na racun vodi na AccountDetailsPage (ili BusinessAccountDetailsPage za poslovni)
-// - Filtriranje po tipu racuna (tabs ili dropdown)
-// - Badge za status racuna (active/blocked/inactive)
+// FE2-02a: Lista svih racuna korisnika
+// Tabelarni prikaz sa filterom po tipu, sortiranjem po stanju i paginacijom
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from '@/lib/notify';
+import {
+  SlidersHorizontal,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import type { Account, AccountType } from '@/types/celina2';
 import { accountService } from '@/services/accountService';
-import { transactionService } from '@/services/transactionService';
-import type { Account, Transaction } from '@/types/celina2';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+const accountTypeLabels: Record<string, string> = {
+  TEKUCI: 'Tekuci',
+  DEVIZNI: 'Devizni',
+  POSLOVNI: 'Poslovni',
+};
 
-function statusClass(status: string): string {
-  if (status === 'ACTIVE') return 'bg-green-100 text-green-700';
-  if (status === 'BLOCKED') return 'bg-red-100 text-red-700';
-  return 'bg-muted text-muted-foreground';
+const accountTypeBadgeVariant: Record<string, 'info' | 'success' | 'warning'> = {
+  TEKUCI: 'info',
+  DEVIZNI: 'success',
+  POSLOVNI: 'warning',
+};
+
+function formatBalance(amount: number, currency: string): string {
+  return `${amount.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
 function formatAccountNumber(accountNumber: string): string {
   if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 7)}-${accountNumber.slice(7, 16)}-${accountNumber.slice(16)}`;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('sr-RS');
+  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
 }
 
 export default function AccountListPage() {
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedType, setSelectedType] = useState<'ALL' | 'TEKUCI' | 'DEVIZNI' | 'POSLOVNI'>('ALL');
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [error, setError] = useState('');
+  const [typeFilter, setTypeFilter] = useState<AccountType | undefined>(undefined);
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    const loadAccounts = async () => {
-      setLoading(true);
-      try {
-        const data = await accountService.getMyAccounts();
-        const safeAccounts = asArray<Account>(data);
-        setAccounts(safeAccounts);
-        if (safeAccounts.length > 0) setSelectedAccount(safeAccounts[0]);
-        else setSelectedAccount(null);
-      } catch {
-        toast.error('Neuspešno učitavanje računa.');
-        setAccounts([]);
-        setSelectedAccount(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAccounts();
+  const fetchAccounts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await accountService.getMyAccounts();
+      const safeData = Array.isArray(data) ? data : [];
+      setAccounts(safeData);
+    } catch {
+      setError('Greska pri ucitavanju racuna. Pokusajte ponovo.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (!selectedAccount?.accountNumber) {
-      setTransactions([]);
-      return;
-    }
+    fetchAccounts();
+  }, [fetchAccounts]);
 
-    const loadTransactions = async () => {
-      setLoadingTransactions(true);
-      try {
-        const response = await transactionService.getAll({
-          accountNumber: selectedAccount.accountNumber,
-          page: 0,
-          limit: 5,
-        });
-        const txSource = (response as { content?: unknown } | undefined)?.content ?? response;
-        setTransactions(asArray<Transaction>(txSource));
-      } catch {
-        toast.error('Neuspešno učitavanje transakcija.');
-        setTransactions([]);
-      } finally {
-        setLoadingTransactions(false);
-      }
-    };
+  useEffect(() => {
+    setPage(0);
+  }, [typeFilter]);
 
-    loadTransactions();
-  }, [selectedAccount]);
+  // Client-side filtering and sorting
+  const filteredAccounts = accounts
+    .filter((a) => !typeFilter || a.accountType === typeFilter)
+    .sort((a, b) => b.availableBalance - a.availableBalance);
 
-  const filteredAccounts = useMemo(() => {
-    const safeAccounts = asArray<Account>(accounts);
-    if (selectedType === 'ALL') return safeAccounts;
-    return safeAccounts.filter((account) => account.accountType === selectedType);
-  }, [accounts, selectedType]);
+  const totalElements = filteredAccounts.length;
+  const totalPages = Math.ceil(totalElements / rowsPerPage);
+  const from = page * rowsPerPage + 1;
+  const to = Math.min((page + 1) * rowsPerPage, totalElements);
+  const paginatedAccounts = filteredAccounts.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Moji računi</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Racuni</h1>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showFilters ? 'secondary' : 'outline'}
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            title="Filteri"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button className={`px-3 py-2 text-sm rounded border ${selectedType === 'ALL' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setSelectedType('ALL')}>
-          Svi
-        </button>
-        <button className={`px-3 py-2 text-sm rounded border ${selectedType === 'TEKUCI' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setSelectedType('TEKUCI')}>
-          Tekući
-        </button>
-        <button className={`px-3 py-2 text-sm rounded border ${selectedType === 'DEVIZNI' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setSelectedType('DEVIZNI')}>
-          Devizni
-        </button>
-        <button className={`px-3 py-2 text-sm rounded border ${selectedType === 'POSLOVNI' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setSelectedType('POSLOVNI')}>
-          Poslovni
-        </button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {loading ? (
-          <p className="text-muted-foreground col-span-full">Učitavanje računa...</p>
-        ) : filteredAccounts.length === 0 ? (
-          <p className="text-muted-foreground col-span-full">Nema računa za izabrani filter.</p>
-        ) : (
-          filteredAccounts.map((account) => (
-            <Card
-              key={account.id}
-              className="cursor-pointer hover:border-primary/60 transition-colors"
-              onClick={() => {
-                setSelectedAccount(account);
-                if (account.accountType === 'POSLOVNI') {
-                  navigate(`/accounts/${account.id}/business`);
-                } else {
-                  navigate(`/accounts/${account.id}`);
-                }
-              }}
+      {showFilters && (
+        <Card className="p-4">
+          <div className="flex flex-wrap gap-3">
+            <Select
+              value={typeFilter ?? 'ALL'}
+              onValueChange={(val) => setTypeFilter(val === 'ALL' ? undefined : val as AccountType)}
             >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{account.name || `${account.accountType} račun`}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p>{formatAccountNumber(account.accountNumber)}</p>
-                <p>Tip: <span className="font-medium">{account.accountType}</span></p>
-                <p>Stanje: <span className="font-medium">{formatAmount(account.balance)} {account.currency}</span></p>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass(account.status)}`}>
-                  {account.status}
-                </span>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tip racuna" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Svi tipovi</SelectItem>
+                <SelectItem value="TEKUCI">Tekuci</SelectItem>
+                <SelectItem value="DEVIZNI">Devizni</SelectItem>
+                <SelectItem value="POSLOVNI">Poslovni</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Poslednje transakcije {selectedAccount ? `(${selectedAccount.accountNumber})` : ''}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loadingTransactions ? (
-            <p className="text-muted-foreground">Učitavanje transakcija...</p>
-          ) : transactions.length === 0 ? (
-            <p className="text-muted-foreground">Nema transakcija za izabrani račun.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">Datum</th>
-                    <th className="text-left py-2">Opis</th>
-                    <th className="text-left py-2">Iznos</th>
-                    <th className="text-left py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((transaction) => (
-                    <tr key={transaction.id} className="border-b">
-                      <td className="py-2">{formatDateTime(transaction.createdAt)}</td>
-                      <td className="py-2">{transaction.description || transaction.paymentPurpose}</td>
-                      <td className="py-2">{formatAmount(transaction.amount)} {transaction.currency}</td>
-                      <td className="py-2">{transaction.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Broj racuna</TableHead>
+                <TableHead>Naziv</TableHead>
+                <TableHead>Tip</TableHead>
+                <TableHead>Raspolozivo stanje</TableHead>
+                <TableHead>Valuta</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedAccounts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    Nema pronadjenih racuna
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedAccounts.map((account) => (
+                  <TableRow
+                    key={account.id}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (account.accountType === 'POSLOVNI') {
+                        navigate(`/accounts/${account.id}/business`);
+                      } else {
+                        navigate(`/accounts/${account.id}`);
+                      }
+                    }}
+                  >
+                    <TableCell className="font-medium">
+                      {formatAccountNumber(account.accountNumber)}
+                    </TableCell>
+                    <TableCell>{account.name || `${accountTypeLabels[account.accountType]} racun`}</TableCell>
+                    <TableCell>
+                      <Badge variant={accountTypeBadgeVariant[account.accountType]}>
+                        {accountTypeLabels[account.accountType]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {formatBalance(account.availableBalance, account.currency)}
+                    </TableCell>
+                    <TableCell>{account.currency}</TableCell>
+                    <TableCell>
+                      <Badge variant={account.status === 'ACTIVE' ? 'success' : account.status === 'BLOCKED' ? 'destructive' : 'secondary'}>
+                        {account.status === 'ACTIVE' ? 'Aktivan' : account.status === 'BLOCKED' ? 'Blokiran' : 'Neaktivan'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Redova po stranici:</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(val) => {
+                  setRowsPerPage(Number(val));
+                  setPage(0);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>
+                {totalElements > 0
+                  ? `${from}–${to} od ${totalElements}`
+                  : '0 rezultata'}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page === 0}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage(page + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
-

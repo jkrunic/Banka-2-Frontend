@@ -129,3 +129,4 @@ export interface AuthUser {
   lastName: string;
   permissions: Permission[];
 }
+

@@ -126,23 +126,36 @@ export default function CreateAccountPage() {
     return () => window.clearTimeout(timeoutId);
   }, [ownerEmail]);
 
+  const mapAccountType = (feType: string): string => {
+    const map: Record<string, string> = { TEKUCI: 'CHECKING', DEVIZNI: 'FOREIGN', POSLOVNI: 'BUSINESS' };
+    return map[feType] || feType;
+  };
+
+  const mapAccountSubtype = (feSub: string): string => {
+    const map: Record<string, string> = {
+      STANDARDNI: 'STANDARD', STEDNI: 'SAVINGS', PENZIONERSKI: 'PENSION',
+      ZA_MLADE: 'YOUTH', STUDENTSKI: 'STUDENT', ZA_NEZAPOSLENE: 'UNEMPLOYED',
+      DOO: 'STANDARD', LICNI: 'PERSONAL',
+    };
+    return map[feSub] || feSub;
+  };
+
   const onSubmit = async (data: CreateAccountFormData) => {
     setIsSubmitting(true);
     try {
+      const isBusiness = data.accountType === 'POSLOVNI';
       await accountService.create({
         ownerEmail: data.ownerEmail,
-        accountType: data.accountType,
-        accountSubtype: data.accountSubtype as AccountSubtype,
+        accountType: mapAccountType(data.accountType) as AccountType,
+        accountSubtype: mapAccountSubtype(data.accountSubtype || 'STANDARDNI') as AccountSubtype,
         currency: data.currency as Currency,
         initialDeposit: data.initialDeposit,
         createCard: data.createCard,
-        companyName: data.accountType === 'POSLOVNI' ? data.companyName : undefined,
-        registrationNumber: data.accountType === 'POSLOVNI' ? data.registrationNumber : undefined,
-        taxId: data.accountType === 'POSLOVNI' ? data.taxId : undefined,
-        activityCode: data.accountType === 'POSLOVNI' ? data.activityCode : undefined,
-        firmAddress: data.accountType === 'POSLOVNI' ? data.firmAddress : undefined,
-        firmCity: data.accountType === 'POSLOVNI' ? data.firmCity : undefined,
-        firmCountry: data.accountType === 'POSLOVNI' ? data.firmCountry : undefined,
+        companyName: isBusiness ? data.companyName : undefined,
+        registrationNumber: isBusiness ? data.registrationNumber : undefined,
+        taxId: isBusiness ? data.taxId : undefined,
+        activityCode: isBusiness ? data.activityCode : undefined,
+        firmAddress: isBusiness ? [data.firmAddress, data.firmCity, data.firmCountry].filter(Boolean).join(', ') : undefined,
       });
 
       toast.success('Racun uspesno kreiran.');

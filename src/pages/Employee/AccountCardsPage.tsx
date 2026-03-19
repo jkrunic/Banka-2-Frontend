@@ -60,7 +60,8 @@ function maskCardNumber(number: string): string {
 }
 
 function formatBalance(amount: number, currency: string): string {
-  return `${amount.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
+  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
 }
 
 function formatAccountNumber(accountNumber: string): string {

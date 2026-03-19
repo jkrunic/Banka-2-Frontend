@@ -64,8 +64,9 @@ const txStatusVariant: Record<string, 'warning' | 'success' | 'destructive' | 's
   CANCELLED: 'secondary',
 };
 
-function formatBalance(amount: number, currency: string): string {
-  return `${amount.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+function formatBalance(amount: number | null | undefined, currency: string): string {
+  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
+  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
 }
 
 function formatAccountNumber(accountNumber: string): string {

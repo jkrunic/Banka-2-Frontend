@@ -1,26 +1,20 @@
-﻿import api from './api';
+import api from './api';
 import type { ExchangeRate, ExchangeRequest } from '../types/celina2';
-
-// FIXME: Potvrditi endpoint-e sa backend timom kad budu gotovi
 
 export const currencyService = {
   getExchangeRates: async (): Promise<ExchangeRate[]> => {
-    // FIXME: Proveriti endpoint sa backendom
     const response = await api.get<ExchangeRate[]>('/exchange-rates');
     return response.data;
   },
 
-  getRate: async (fromCurrency: string, toCurrency: string): Promise<ExchangeRate> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.get<ExchangeRate>(`/exchange-rates/${fromCurrency}/${toCurrency}`);
-    return response.data;
-  },
-
-  convert: async (data: ExchangeRequest): Promise<{ convertedAmount: number; rate: number }> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.post('/exchange/convert', data);
+  convert: async (data: ExchangeRequest): Promise<{ convertedAmount: number; exchangeRate: number; fromCurrency: string; toCurrency: string }> => {
+    const response = await api.get('/exchange/calculate', {
+      params: {
+        amount: data.amount,
+        fromCurrency: data.fromCurrency,
+        toCurrency: data.toCurrency,
+      },
+    });
     return response.data;
   },
 };
-
-

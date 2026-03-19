@@ -1,4 +1,4 @@
-﻿import api from './api';
+import api from './api';
 import type {
   Transaction,
   Transfer,
@@ -9,65 +9,53 @@ import type {
 } from '../types/celina2';
 import type { PaginatedResponse } from '../types';
 
-// FIXME: Potvrditi endpoint-e sa backend timom kad budu gotovi
-
 export const transactionService = {
   // --- Placanja ---
 
   createPayment: async (data: NewPaymentRequest): Promise<Transaction> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.post<Transaction>('/transactions/payment', data);
+    const response = await api.post<Transaction>('/payments', data);
     return response.data;
   },
 
+  // TODO: Backend verifikacija placanja jos nije implementirana
   verifyPayment: async (data: VerificationRequest): Promise<Transaction> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.post<Transaction>('/transactions/payment/verify', data);
+    const response = await api.post<Transaction>('/payments/verify', data);
     return response.data;
   },
 
   getAll: async (filters?: TransactionFilters): Promise<PaginatedResponse<Transaction>> => {
     const params = new URLSearchParams();
-    if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
     if (filters?.status) params.append('status', filters.status);
-    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
-    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
-    if (filters?.amountMin !== undefined) params.append('amountMin', String(filters.amountMin));
-    if (filters?.amountMax !== undefined) params.append('amountMax', String(filters.amountMax));
+    if (filters?.dateFrom) params.append('fromDate', filters.dateFrom);
+    if (filters?.dateTo) params.append('toDate', filters.dateTo);
+    if (filters?.amountMin !== undefined) params.append('minAmount', String(filters.amountMin));
+    if (filters?.amountMax !== undefined) params.append('maxAmount', String(filters.amountMax));
     if (filters?.page !== undefined) params.append('page', String(filters.page));
-    if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+    if (filters?.limit !== undefined) params.append('size', String(filters.limit));
 
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.get<PaginatedResponse<Transaction>>('/transactions', { params });
+    const response = await api.get<PaginatedResponse<Transaction>>('/payments', { params });
     return response.data;
   },
 
   getById: async (id: number): Promise<Transaction> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.get<Transaction>(`/transactions/${id}`);
+    const response = await api.get<Transaction>(`/payments/${id}`);
     return response.data;
   },
 
   // --- Prenosi ---
 
   createTransfer: async (data: TransferRequest): Promise<Transfer> => {
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.post<Transfer>('/transactions/transfer', data);
+    const response = await api.post<Transfer>('/transfers/internal', data);
     return response.data;
   },
 
-  getTransfers: async (filters?: TransactionFilters): Promise<PaginatedResponse<Transfer>> => {
-    const params = new URLSearchParams();
-    if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
-    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
-    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
-    if (filters?.page !== undefined) params.append('page', String(filters.page));
-    if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+  createFxTransfer: async (data: TransferRequest): Promise<Transfer> => {
+    const response = await api.post<Transfer>('/transfers/fx', data);
+    return response.data;
+  },
 
-    // FIXME: Proveriti endpoint sa backendom
-    const response = await api.get<PaginatedResponse<Transfer>>('/transactions/transfers', { params });
+  getTransfers: async (filters?: TransactionFilters): Promise<Transfer[]> => {
+    const response = await api.get<Transfer[]>('/transfers');
     return response.data;
   },
 };
-
-

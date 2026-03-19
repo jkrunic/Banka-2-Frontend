@@ -120,11 +120,14 @@ export default function HomePage() {
     const loadData = async () => {
       setLoading(true);
       try {
+        const safe = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+          try { return await fn(); } catch { return fallback; }
+        };
         const [myAccounts, recentTransactions, savedRecipients, rates] = await Promise.all([
-          accountService.getMyAccounts(),
-          transactionService.getAll({ page: 0, limit: 5 }),
-          paymentRecipientService.getAll(),
-          currencyService.getExchangeRates(),
+          safe(() => accountService.getMyAccounts(), []),
+          safe(() => transactionService.getAll({ page: 0, limit: 5 }), { content: [], totalElements: 0, totalPages: 0 } as never),
+          safe(() => paymentRecipientService.getAll(), []),
+          safe(() => currencyService.getExchangeRates(), []),
         ]);
 
         const safeAccounts = asArray<Account>(myAccounts);

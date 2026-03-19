@@ -273,16 +273,15 @@ export interface TransferRequest {
 }
 
 export interface ExchangeRequest {
-  fromCurrency: Currency;
-  toCurrency: Currency;
+  fromCurrency: string | Currency;
+  toCurrency: string | Currency;
   amount: number;
-  accountNumber: string;
+  accountNumber?: string;
 }
 
 export interface NewCardRequest {
-  accountNumber: string;
-  cardType: CardType;
-  authorizedPersonId?: number;   // Za poslovni racun - ovlasceno lice
+  accountId: number;
+  cardLimit?: number;
 }
 
 export interface LoanApplicationRequest {

@@ -153,7 +153,7 @@ export default function AccountCardsPage() {
 
     setIsCreating(true);
     try {
-      await cardService.create({ accountId: account?.id ?? 0 } as NewCardRequest);
+      await cardService.create({ accountId: account?.id ?? 0 });
       toast.success('Kartica kreirana.');
       setShowCreateCard(false);
       setNewCardType('');

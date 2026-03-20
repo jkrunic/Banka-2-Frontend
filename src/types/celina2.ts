@@ -174,12 +174,15 @@ export interface Card {
   id: number;
   cardNumber: string;            // 16 cifara (prikazuje se maskirano)
   cardType: CardType;
+  cardName?: string;             // Backend: "Visa Debit" itd.
   accountNumber: string;
   holderName: string;
+  ownerName?: string;            // Backend alias za holderName
   expirationDate: string;
   cvv?: string;                  // 3 cifre, prikazuje se samo pri kreiranju
   status: CardStatus;
   limit: number;
+  cardLimit?: number;            // Backend alias za limit
   createdAt: string;
 }
 

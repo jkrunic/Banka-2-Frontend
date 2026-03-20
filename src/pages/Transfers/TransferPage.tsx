@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import VerificationModal from '@/components/shared/VerificationModal';
 import { ArrowLeftRight, Wallet } from 'lucide-react';
 
 function asArray<T>(value: unknown): T[] {
@@ -53,8 +52,6 @@ export default function TransferPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [showVerification, setShowVerification] = useState(false);
-  const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
   const [showConfirmStep, setShowConfirmStep] = useState(false);
   const [submittedData, setSubmittedData] = useState<TransferFormData | null>(null);
 
@@ -248,7 +245,7 @@ export default function TransferPage() {
 
     try {
       // Auto-detect: if currencies differ, server-side routes to FX
-      const transfer = await transactionService.createTransfer({
+      await transactionService.createTransfer({
         fromAccountNumber: submittedData.fromAccountNumber,
         toAccountNumber: submittedData.toAccountNumber,
         amount: Number(submittedData.amount),
@@ -264,15 +261,7 @@ export default function TransferPage() {
     }
   };
 
-  const handleVerificationClose = () => {
-    setShowVerification(false);
-  };
 
-  const handleVerificationSuccess = () => {
-    setShowVerification(false);
-    toast.success('Prenos je uspesno verifikovan.');
-    navigate('/accounts');
-  };
 
   return (
     <div className="container mx-auto max-w-2xl py-6">
@@ -500,12 +489,6 @@ export default function TransferPage() {
         </CardContent>
       </Card>
 
-      <VerificationModal
-        transactionId={pendingTransactionId}
-        isOpen={showVerification}
-        onClose={handleVerificationClose}
-        onSuccess={handleVerificationSuccess}
-      />
     </div>
   );
 }

@@ -75,7 +75,8 @@ function formatBalance(amount: number | null | undefined, currency: string): str
   return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
 }
 
-function formatAccountNumber(accountNumber: string): string {
+function formatAccountNumber(accountNumber: string | null | undefined): string {
+  if (!accountNumber) return '-';
   if (accountNumber.length !== 18) return accountNumber;
   return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
 }
@@ -528,8 +529,8 @@ export default function AccountListPage() {
                             {isOutgoing ? tx.recipientName : (tx.recipientName || '—')}
                             <span className="block text-xs text-muted-foreground">
                               {isOutgoing
-                                ? formatAccountNumber(tx.toAccountNumber)
-                                : formatAccountNumber(tx.fromAccountNumber)}
+                                ? formatAccountNumber((tx as Record<string, string>).toAccount || tx.toAccountNumber)
+                                : formatAccountNumber((tx as Record<string, string>).fromAccount || tx.fromAccountNumber)}
                             </span>
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate" title={tx.paymentPurpose}>

@@ -187,7 +187,8 @@ export default function PaymentHistoryPage() {
     setExpandedId((prev) => (prev === transactionId ? null : transactionId));
   };
 
-  const printTransaction = (tx: Record<string, unknown>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const printTransaction = (tx: any) => {
     try {
       const doc = new jsPDF();
       const s = (v: unknown) => (v != null && v !== '' ? String(v) : '-');

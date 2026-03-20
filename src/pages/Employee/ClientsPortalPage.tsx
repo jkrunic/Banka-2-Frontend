@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const PAGE_SIZE = 10;
-const ACCOUNTS_PAGE_SIZE = 20;
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -140,14 +139,9 @@ export default function ClientsPortalPage() {
     }
   };
 
-  const loadClientAccounts = async (clientEmail: string) => {
-    const accountsResponse = await accountService.getAll({
-      ownerEmail: clientEmail,
-      page: 0,
-      limit: ACCOUNTS_PAGE_SIZE,
-    });
-
-    return asArray<Account>(accountsResponse.content);
+  const loadClientAccounts = async (clientId: number) => {
+    const accounts = await accountService.getByClientId(clientId);
+    return asArray<Account>(accounts);
   };
 
   const loadClientFromRoute = async (clientId: number) => {
@@ -159,7 +153,7 @@ export default function ClientsPortalPage() {
       fillEditForm(client);
       setIsEditing(false);
 
-      const accounts = await loadClientAccounts(client.email);
+      const accounts = await loadClientAccounts(client.id);
       setClientAccounts(accounts);
     } catch (error) {
       resetDetailsState();
@@ -217,7 +211,7 @@ export default function ClientsPortalPage() {
       toast.success('Klijent uspesno izmenjen.');
 
       await loadClients();
-      const accounts = await loadClientAccounts(updatedClient.email);
+      const accounts = await loadClientAccounts(updatedClient.id);
       setClientAccounts(accounts);
     } catch (error) {
       toast.error(getErrorMessage('Izmena klijenta nije uspela.', error));

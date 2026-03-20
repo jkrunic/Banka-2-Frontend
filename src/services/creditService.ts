@@ -8,13 +8,10 @@ import type {
 } from '../types/celina2';
 import type { PaginatedResponse } from '../types';
 
-// Backend endpointi za kredite ce biti implementirani u Sprint 3
-// URL-ovi su pripremljeni prema specifikaciji
-
 export const creditService = {
   getMyLoans: async (): Promise<Loan[]> => {
-    const response = await api.get<Loan[]>('/loans/my');
-    return response.data;
+    const response = await api.get<PaginatedResponse<Loan>>('/loans/my');
+    return Array.isArray(response.data) ? response.data : (response.data?.content ?? []);
   },
 
   getAll: async (filters?: LoanFilters): Promise<PaginatedResponse<Loan>> => {
@@ -23,7 +20,7 @@ export const creditService = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
     if (filters?.page !== undefined) params.append('page', String(filters.page));
-    if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+    if (filters?.limit !== undefined) params.append('size', String(filters.limit));
 
     const response = await api.get<PaginatedResponse<Loan>>('/loans', { params });
     return response.data;
@@ -34,17 +31,17 @@ export const creditService = {
     return response.data;
   },
 
-  apply: async (data: LoanApplicationRequest): Promise<Loan> => {
-    const response = await api.post<Loan>('/loans/apply', data);
+  apply: async (data: LoanApplicationRequest): Promise<LoanRequest> => {
+    const response = await api.post<LoanRequest>('/loans', data);
     return response.data;
   },
 
-  approve: async (loanId: number): Promise<void> => {
-    await api.patch(`/loans/${loanId}/approve`);
+  approve: async (requestId: number): Promise<void> => {
+    await api.patch(`/loans/requests/${requestId}/approve`);
   },
 
-  reject: async (loanId: number, reason: string): Promise<void> => {
-    await api.patch(`/loans/${loanId}/reject`, { reason });
+  reject: async (requestId: number): Promise<void> => {
+    await api.patch(`/loans/requests/${requestId}/reject`);
   },
 
   getInstallments: async (loanId: number): Promise<Installment[]> => {
@@ -54,11 +51,9 @@ export const creditService = {
 
   getRequests: async (filters?: LoanFilters): Promise<PaginatedResponse<LoanRequest>> => {
     const params = new URLSearchParams();
-    if (filters?.loanType) params.append('loanType', filters.loanType);
     if (filters?.status) params.append('status', filters.status);
-    if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
     if (filters?.page !== undefined) params.append('page', String(filters.page));
-    if (filters?.limit !== undefined) params.append('limit', String(filters.limit));
+    if (filters?.limit !== undefined) params.append('size', String(filters.limit));
 
     const response = await api.get<PaginatedResponse<LoanRequest>>('/loans/requests', { params });
     return response.data;

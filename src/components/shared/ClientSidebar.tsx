@@ -164,6 +164,19 @@ export default function ClientSidebar() {
 
         {/* Navigation and Theme */}
         <nav className="flex-1 space-y-6 overflow-y-auto">
+          {isEmployeeOrAdmin && (
+          <div className="space-y-1 mb-2">
+            <NavLink
+              to="/home"
+              className={linkClassName}
+              onClick={() => setOpen(false)}
+            >
+              <Home className="h-4 w-4" />
+              <span>Početna</span>
+            </NavLink>
+          </div>
+          )}
+
           {!isEmployeeOrAdmin && (
           <div className="space-y-2">
             <p className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

@@ -182,11 +182,11 @@ export default function CardListPage() {
           {asArray<Card>(cards).map((card) => (
             <div key={card.id} className="rounded-xl overflow-hidden shadow-lg">
               {/* Credit card face */}
-              <div className={`relative p-6 ${cardGradient((card as Record<string, unknown>).cardName as string || card.cardType || 'VISA')} min-h-[220px] flex flex-col justify-between`}>
+              <div className={`relative p-6 ${cardGradient(card.cardName || card.cardType || 'VISA')} min-h-[220px] flex flex-col justify-between`}>
                 {/* Top row: type + status */}
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-bold tracking-wide drop-shadow-sm">
-                    {(card as Record<string, unknown>).cardName as string || card.cardType || 'Visa Debit'}
+                    {card.cardName || card.cardType || 'Visa Debit'}
                   </span>
                   <Badge
                     variant={statusBadgeVariant(card.status)}
@@ -205,7 +205,7 @@ export default function CardListPage() {
                 <div className="flex justify-between items-end text-sm">
                   <div className="space-y-0.5">
                     <p className="text-[11px] uppercase opacity-75">Vlasnik</p>
-                    <p className="font-medium">{(card as Record<string, unknown>).ownerName as string || card.holderName || '-'}</p>
+                    <p className="font-medium">{card.ownerName || card.holderName || '-'}</p>
                   </div>
                   <div className="text-right space-y-0.5">
                     <p className="text-[11px] uppercase opacity-75">Istek</p>
@@ -227,7 +227,7 @@ export default function CardListPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Limit</span>
-                  <span className="font-medium">{formatAmount((card as Record<string, unknown>).cardLimit as number ?? card.limit)} RSD</span>
+                  <span className="font-medium">{formatAmount(card.cardLimit ?? card.limit)} RSD</span>
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">

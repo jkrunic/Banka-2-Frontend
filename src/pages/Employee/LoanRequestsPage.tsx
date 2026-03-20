@@ -100,7 +100,7 @@ export default function LoanRequestsPage() {
 
     setProcessingId(loanId);
     try {
-      await creditService.reject(loanId, rejectReason.trim());
+      await creditService.reject(loanId);
       toast.success('Zahtev je odbijen.');
       setRejectingLoanId(null);
       setRejectReason('');

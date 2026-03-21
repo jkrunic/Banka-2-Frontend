@@ -6,7 +6,7 @@ export default function MainLayout() {
   return (
     <div className="flex min-h-screen">
       <ClientSidebar />
-      <main className="flex-1 bg-muted/40">
+      <main className="min-w-0 flex-1 bg-muted/40">
         <div className="container py-6">
           <RouteErrorBoundary>
             <Outlet />

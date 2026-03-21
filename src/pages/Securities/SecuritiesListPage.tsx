@@ -35,8 +35,7 @@
 // - Skeleton loading
 // - Empty state sa ikonom
 
-import { useEffect, useState } from 'react';
-
+//import { useEffect, useState } from 'react';
 export default function SecuritiesListPage() {
   // TODO: Implementirati prema TODO komentarima iznad
 

@@ -2,37 +2,47 @@
 // Tipovi za Banka 2025 - Celina 3: Trgovina na berzi
 // ============================================================
 
-// --- Enumi ---
+// --- Konstante + tipovi ---
 
-export enum ListingType {
-  STOCK = 'STOCK',
-  FUTURES = 'FUTURES',
-  FOREX = 'FOREX',
-}
+export const ListingType = {
+  STOCK: 'STOCK',
+  FUTURES: 'FUTURES',
+  FOREX: 'FOREX',
+} as const;
 
-export enum OrderType {
-  MARKET = 'MARKET',
-  LIMIT = 'LIMIT',
-  STOP = 'STOP',
-  STOP_LIMIT = 'STOP_LIMIT',
-}
+export type ListingType = (typeof ListingType)[keyof typeof ListingType];
 
-export enum OrderDirection {
-  BUY = 'BUY',
-  SELL = 'SELL',
-}
+export const OrderType = {
+  MARKET: 'MARKET',
+  LIMIT: 'LIMIT',
+  STOP: 'STOP',
+  STOP_LIMIT: 'STOP_LIMIT',
+} as const;
 
-export enum OrderStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  DECLINED = 'DECLINED',
-  DONE = 'DONE',
-}
+export type OrderType = (typeof OrderType)[keyof typeof OrderType];
 
-export enum ActuaryType {
-  AGENT = 'AGENT',
-  SUPERVISOR = 'SUPERVISOR',
-}
+export const OrderDirection = {
+  BUY: 'BUY',
+  SELL: 'SELL',
+} as const;
+
+export type OrderDirection = (typeof OrderDirection)[keyof typeof OrderDirection];
+
+export const OrderStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  DECLINED: 'DECLINED',
+  DONE: 'DONE',
+} as const;
+
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+
+export const ActuaryType = {
+  AGENT: 'AGENT',
+  SUPERVISOR: 'SUPERVISOR',
+} as const;
+
+export type ActuaryType = (typeof ActuaryType)[keyof typeof ActuaryType];
 
 // --- Hartije od vrednosti ---
 
@@ -50,15 +60,12 @@ export interface Listing {
   changePercent: number;
   initialMarginCost: number;
   maintenanceMargin: number;
-  // Stock-specific
   outstandingShares?: number;
   dividendYield?: number;
   marketCap?: number;
-  // Forex-specific
   baseCurrency?: string;
   quoteCurrency?: string;
   liquidity?: string;
-  // Futures-specific
   contractSize?: number;
   contractUnit?: string;
   settlementDate?: string;
@@ -159,7 +166,7 @@ export interface PortfolioSummary {
 export interface TaxRecord {
   userId: number;
   userName: string;
-  userType: string; // 'CLIENT' | 'EMPLOYEE'
+  userType: string;
   totalProfit: number;
   taxOwed: number;
   taxPaid: number;

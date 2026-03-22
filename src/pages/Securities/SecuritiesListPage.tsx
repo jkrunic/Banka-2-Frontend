@@ -35,6 +35,7 @@
 // - Skeleton loading
 // - Empty state sa ikonom
 
+// @ts-expect-error stub page — hooks will be used once implemented
 import { useEffect, useState } from 'react';
 
 export default function SecuritiesListPage() {

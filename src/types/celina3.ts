@@ -2,37 +2,42 @@
 // Tipovi za Banka 2025 - Celina 3: Trgovina na berzi
 // ============================================================
 
-// --- Enumi ---
+// --- Enumi (kao const objekti za kompatibilnost sa erasableSyntaxOnly) ---
 
-export enum ListingType {
-  STOCK = 'STOCK',
-  FUTURES = 'FUTURES',
-  FOREX = 'FOREX',
-}
+export const ListingType = {
+  STOCK: 'STOCK',
+  FUTURES: 'FUTURES',
+  FOREX: 'FOREX',
+} as const;
+export type ListingType = (typeof ListingType)[keyof typeof ListingType];
 
-export enum OrderType {
-  MARKET = 'MARKET',
-  LIMIT = 'LIMIT',
-  STOP = 'STOP',
-  STOP_LIMIT = 'STOP_LIMIT',
-}
+export const OrderType = {
+  MARKET: 'MARKET',
+  LIMIT: 'LIMIT',
+  STOP: 'STOP',
+  STOP_LIMIT: 'STOP_LIMIT',
+} as const;
+export type OrderType = (typeof OrderType)[keyof typeof OrderType];
 
-export enum OrderDirection {
-  BUY = 'BUY',
-  SELL = 'SELL',
-}
+export const OrderDirection = {
+  BUY: 'BUY',
+  SELL: 'SELL',
+} as const;
+export type OrderDirection = (typeof OrderDirection)[keyof typeof OrderDirection];
 
-export enum OrderStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  DECLINED = 'DECLINED',
-  DONE = 'DONE',
-}
+export const OrderStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  DECLINED: 'DECLINED',
+  DONE: 'DONE',
+} as const;
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
-export enum ActuaryType {
-  AGENT = 'AGENT',
-  SUPERVISOR = 'SUPERVISOR',
-}
+export const ActuaryType = {
+  AGENT: 'AGENT',
+  SUPERVISOR: 'SUPERVISOR',
+} as const;
+export type ActuaryType = (typeof ActuaryType)[keyof typeof ActuaryType];
 
 // --- Hartije od vrednosti ---
 

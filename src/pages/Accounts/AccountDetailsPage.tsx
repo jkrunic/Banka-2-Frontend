@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ArrowDownLeft,
-  Pencil,
   CreditCard,
   ArrowLeftRight,
   History,
@@ -86,10 +85,8 @@ export default function AccountDetailsPage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [renameValue, setRenameValue] = useState('');
   const [dailyLimit, setDailyLimit] = useState('');
   const [monthlyLimit, setMonthlyLimit] = useState('');
-  const [isSavingName, setIsSavingName] = useState(false);
   const [isSavingLimits, setIsSavingLimits] = useState(false);
 
   useEffect(() => {
@@ -114,7 +111,6 @@ export default function AccountDetailsPage() {
           monthlySpending: Number(raw.monthlySpending) || 0,
         } as Account;
         setAccount(accountData);
-        setRenameValue(accountData.name || '');
         setDailyLimit(String(accountData.dailyLimit));
         setMonthlyLimit(String(accountData.monthlyLimit));
 
@@ -154,26 +150,6 @@ export default function AccountDetailsPage() {
     if (!account || account.monthlyLimit <= 0) return 0;
     return Math.min(100, (account.monthlySpending / account.monthlyLimit) * 100);
   }, [account]);
-
-  const saveName = async () => {
-    if (!account) return;
-    const newName = renameValue.trim();
-    if (!newName) {
-      toast.error('Naziv racuna ne sme biti prazan.');
-      return;
-    }
-
-    setIsSavingName(true);
-    try {
-      const updated = await accountService.updateName(account.id, newName);
-      setAccount(updated);
-      toast.success('Naziv racuna je uspesno promenjen.');
-    } catch {
-      toast.error('Promena naziva nije uspela.');
-    } finally {
-      setIsSavingName(false);
-    }
-  };
 
   const saveLimits = async () => {
     if (!account) return;
@@ -350,18 +326,6 @@ export default function AccountDetailsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Pencil className="h-4 w-4 text-muted-foreground" />
-            <Input
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              placeholder="Novi naziv racuna"
-              className="max-w-sm"
-            />
-            <Button onClick={saveName} disabled={isSavingName}>
-              {isSavingName ? 'Cuvanje...' : 'Promeni naziv'}
-            </Button>
-          </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => navigate(`/payments/new?from=${account.accountNumber}`)}>
               <CreditCard className="mr-2 h-4 w-4" /> Novo placanje

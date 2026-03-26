@@ -289,25 +289,7 @@ export default function ExchangePage() {
                 {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="accountNumber">Racun</Label>
-                <select
-                  id="accountNumber"
-                  title="Racun"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  {...register('accountNumber')}
-                >
-                  <option value="">Izaberite racun</option>
-                  {eligibleAccounts.map((account) => (
-                    <option key={account.id} value={account.accountNumber}>
-                      {account.accountNumber} ({account.currency})
-                    </option>
-                  ))}
-                </select>
-                {errors.accountNumber && (
-                  <p className="text-sm text-destructive">{errors.accountNumber.message}</p>
-                )}
-              </div>
+              {/* Polje za racun uklonjeno - menjacnica je samo informativna */}
 
               <div className="md:col-span-2 flex justify-end">
                 <Button type="submit" className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all">Konvertuj</Button>

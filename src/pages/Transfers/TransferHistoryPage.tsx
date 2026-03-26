@@ -45,6 +45,13 @@ export default function TransferHistoryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const limit = 10;
 
+  const resetFilters = () => {
+    setAccountNumber('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(0);
+  };
+
   useEffect(() => {
     const loadAccounts = async () => {
       try {
@@ -63,7 +70,11 @@ export default function TransferHistoryPage() {
     const loadTransfers = async () => {
       setLoading(true);
       try {
-        const transfers = await transactionService.getTransfers();
+        const transfers = await transactionService.getTransfers({
+          accountNumber: accountNumber || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+        });
         setTransfers(asArray<Transfer>(transfers));
         setTotalPages(1);
       } catch {
@@ -89,6 +100,13 @@ export default function TransferHistoryPage() {
     });
   }, [transfers]);
 
+  const paginatedTransfers = useMemo(() => {
+    const total = Math.max(1, Math.ceil(sortedTransfers.length / limit));
+    if (totalPages !== total) setTotalPages(total);
+    const start = page * limit;
+    return sortedTransfers.slice(start, start + limit);
+  }, [sortedTransfers, page, totalPages]);
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div>
@@ -103,7 +121,7 @@ export default function TransferHistoryPage() {
         <CardHeader>
           <CardTitle>Filteri</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
             <label htmlFor="account-filter" className="text-sm font-medium">
               Racun
@@ -148,6 +166,12 @@ export default function TransferHistoryPage() {
               onChange={(e) => setDateTo(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
+          </div>
+
+          <div className="flex items-end">
+            <Button variant="outline" onClick={resetFilters}>
+              Resetuj filtere
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -196,7 +220,7 @@ export default function TransferHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedTransfers.map((transfer, index) => (
+                {paginatedTransfers.map((transfer, index) => (
                   <tr key={transfer.id} className="border-b hover:bg-muted/50 transition-colors">
                     <td className="py-2">{page * limit + index + 1}</td>
                     <td className="py-2">

@@ -15,7 +15,8 @@ const accountNumberSchema = z
 
 const positiveAmountSchema = z
   .number({ message: 'Iznos mora biti broj' })
-  .positive('Iznos mora biti veci od 0');
+  .positive('Iznos mora biti veci od 0')
+  .max(999999999999.99, 'Iznos prelazi maksimalnu dozvoljenu vrednost');
 
 const paymentCodeSchema = z
   .string()
@@ -158,7 +159,7 @@ export const createAccountSchema = z
     accountType: z.enum(['TEKUCI', 'DEVIZNI', 'POSLOVNI'], { message: 'Izaberite tip racuna' }),
     accountSubtype: z.string().min(1, 'Izaberite podvrstu racuna'),
     currency: z.string().min(1, 'Izaberite valutu'),
-    initialDeposit: z.number().min(0, 'Depozit ne moze biti negativan').optional(),
+    initialDeposit: z.number().min(0, 'Depozit ne moze biti negativan').max(999999999999.99, 'Depozit prelazi maksimalnu dozvoljenu vrednost').optional(),
     createCard: z.boolean().optional(),
     // Polja za poslovni racun - firma
     companyName: z.string().optional(),

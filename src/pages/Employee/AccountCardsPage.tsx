@@ -78,6 +78,8 @@ export default function AccountCardsPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [accountNumber, setAccountNumber] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [searchResults, setSearchResults] = useState<Account[]>([]);
   const [account, setAccount] = useState<Account | null>(null);
   const [cards, setCards] = useState<BankCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,15 +112,48 @@ export default function AccountCardsPage() {
   }, [id]);
 
   const searchCards = useCallback(async () => {
-    if (!accountNumber) {
-      toast.error('Unesite broj racuna.');
+    if (!accountNumber && !ownerName.trim()) {
+      toast.error('Unesite broj racuna ili ime vlasnika.');
       return;
     }
 
     setLoading(true);
     setError('');
+    setSearchResults([]);
     try {
-      const accountData = await accountService.getById(Number(accountNumber));
+      // Pretraga po imenu vlasnika - prikazuje listu rezultata
+      if (ownerName.trim() && !accountNumber) {
+        const allAccounts = await accountService.getAll({ ownerName: ownerName.trim(), page: 0, limit: 20 });
+        const results = allAccounts.content ?? [];
+        if (results.length === 0) throw new Error('Nema rezultata');
+        if (results.length === 1) {
+          // Samo jedan rezultat - odmah ga selektuj
+          const accountData = results[0];
+          setAccount(accountData);
+          const cardsData = await cardService.getByAccount(accountData.id);
+          setCards(Array.isArray(cardsData) ? cardsData : []);
+        } else {
+          // Vise rezultata - prikazi listu za izbor
+          setSearchResults(results);
+          setAccount(null);
+          setCards([]);
+        }
+        return;
+      }
+
+      // Pretraga po broju racuna / ID-ju
+      let accountData;
+      const numId = Number(accountNumber);
+      if (Number.isFinite(numId) && numId > 0 && numId < 1000000) {
+        accountData = await accountService.getById(numId);
+      } else {
+        const allAccounts = await accountService.getAll({ page: 0, limit: 100 });
+        const found = allAccounts.content?.find((a: { accountNumber?: string }) =>
+          a.accountNumber?.includes(accountNumber.replace(/-/g, ''))
+        );
+        if (!found) throw new Error('Racun nije pronadjen');
+        accountData = found;
+      }
       setAccount(accountData);
       const cardsData = await cardService.getByAccount(accountData.id);
       setCards(Array.isArray(cardsData) ? cardsData : []);
@@ -129,7 +164,23 @@ export default function AccountCardsPage() {
     } finally {
       setLoading(false);
     }
-  }, [accountNumber]);
+  }, [accountNumber, ownerName]);
+
+  const selectSearchResult = useCallback(async (selectedAccount: Account) => {
+    setSearchResults([]);
+    setAccount(selectedAccount);
+    setAccountNumber(selectedAccount.accountNumber);
+    setLoading(true);
+    try {
+      const cardsData = await cardService.getByAccount(selectedAccount.id);
+      setCards(Array.isArray(cardsData) ? cardsData : []);
+    } catch {
+      toast.error('Ucitavanje kartica nije uspelo.');
+      setCards([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const runAction = async (cardId: number, action: 'block' | 'unblock' | 'deactivate') => {
     setProcessingId(cardId);
@@ -187,18 +238,27 @@ export default function AccountCardsPage() {
       {/* Search */}
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[250px] space-y-1">
+          <div className="flex-1 min-w-[200px] space-y-1">
             <label className="text-xs text-muted-foreground">Broj racuna</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Unesite broj racuna (18 cifara)"
+                placeholder="18 cifara"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
                 className="pl-8"
                 onKeyDown={(e) => e.key === 'Enter' && searchCards()}
               />
             </div>
+          </div>
+          <div className="flex-1 min-w-[200px] space-y-1">
+            <label className="text-xs text-muted-foreground">Ime vlasnika</label>
+            <Input
+              placeholder="Ime ili prezime"
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && searchCards()}
+            />
           </div>
           <Button onClick={searchCards} disabled={loading}>
             <Search className="mr-2 h-4 w-4" />
@@ -208,6 +268,31 @@ export default function AccountCardsPage() {
             <Plus className="mr-2 h-4 w-4" /> Nova kartica
           </Button>
         </div>
+
+        {/* Search results list (multiple accounts found by name) */}
+        {searchResults.length > 0 && (
+          <div className="mt-3 border rounded-md divide-y">
+            <p className="px-3 py-2 text-xs text-muted-foreground font-medium">
+              Pronadjeno {searchResults.length} racuna — izaberite:
+            </p>
+            {searchResults.map((acc) => (
+              <button
+                key={acc.id}
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center justify-between gap-2"
+                onClick={() => selectSearchResult(acc)}
+              >
+                <span>
+                  <strong>{acc.ownerName || '-'}</strong>
+                  <span className="text-muted-foreground ml-2">{formatAccountNumber(acc.accountNumber)}</span>
+                </span>
+                <Badge variant={acc.status === 'ACTIVE' ? 'success' : acc.status === 'BLOCKED' ? 'destructive' : 'secondary'} className="text-[11px]">
+                  {acc.status === 'ACTIVE' ? 'Aktivan' : acc.status === 'BLOCKED' ? 'Blokiran' : 'Neaktivan'}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Account info */}
         {account && (

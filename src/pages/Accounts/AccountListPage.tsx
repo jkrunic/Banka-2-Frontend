@@ -90,6 +90,22 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function normalizeAccountType(raw: string | undefined): AccountType {
+  switch (raw) {
+    case 'CHECKING':
+    case 'TEKUCI':
+      return 'TEKUCI';
+    case 'FOREIGN':
+    case 'DEVIZNI':
+      return 'DEVIZNI';
+    case 'BUSINESS':
+    case 'POSLOVNI':
+      return 'POSLOVNI';
+    default:
+      return 'TEKUCI';
+  }
+}
+
 export default function AccountListPage() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -159,7 +175,7 @@ export default function AccountListPage() {
         currency: a.currency || (a as unknown as Record<string, unknown>).currencyCode || 'RSD',
         availableBalance: Number(a.availableBalance) || 0,
         balance: Number(a.balance) || 0,
-        accountType: a.accountType || 'CHECKING',
+        accountType: normalizeAccountType(a.accountType),
         accountNumber: a.accountNumber || '',
         name: a.name || undefined,
         status: a.status || 'ACTIVE',
@@ -394,6 +410,7 @@ export default function AccountListPage() {
                 <TableHead>Raspolozivo stanje</TableHead>
                 <TableHead>Valuta</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Akcije</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -445,6 +462,22 @@ export default function AccountListPage() {
                       <Badge variant={account.status === 'ACTIVE' ? 'success' : account.status === 'BLOCKED' ? 'destructive' : 'secondary'}>
                         {account.status === 'ACTIVE' ? 'Aktivan' : account.status === 'BLOCKED' ? 'Blokiran' : 'Neaktivan'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (account.accountType === 'POSLOVNI' || account.accountType === 'BUSINESS') {
+                            navigate(`/accounts/${account.id}/business`);
+                          } else {
+                            navigate(`/accounts/${account.id}`);
+                          }
+                        }}
+                      >
+                        Detalji
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

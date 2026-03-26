@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeftRight, Wallet } from 'lucide-react';
+import VerificationModal from '@/components/shared/VerificationModal';
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -54,6 +55,9 @@ export default function TransferPage() {
 
   const [showConfirmStep, setShowConfirmStep] = useState(false);
   const [submittedData, setSubmittedData] = useState<TransferFormData | null>(null);
+
+  const [showVerification, setShowVerification] = useState(false);
+  const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
 
   const [exchangePreview, setExchangePreview] = useState<{
     rate: number;
@@ -245,15 +249,24 @@ export default function TransferPage() {
 
     try {
       // Auto-detect: if currencies differ, server-side routes to FX
-      await transactionService.createTransfer({
+      const result = await transactionService.createTransfer({
         fromAccountNumber: submittedData.fromAccountNumber,
         toAccountNumber: submittedData.toAccountNumber,
         amount: Number(submittedData.amount),
       });
 
-      setShowConfirmStep(false);
-      toast.success('Prenos je uspešno izvršen!');
-      navigate('/accounts');
+      // Otvori verifikacioni modal
+      const txId = (result as unknown as { id?: number })?.id;
+      if (txId) {
+        setPendingTransactionId(txId);
+        setShowVerification(true);
+        toast.info('Prenos je kreiran. Potrebna je verifikacija.');
+      } else {
+        // Fallback: ako backend ne vraca ID, prenos je direktno izvrsen
+        setShowConfirmStep(false);
+        toast.success('Prenos je uspešno izvršen!');
+        navigate('/accounts');
+      }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Kreiranje prenosa nije uspelo.'));
     } finally {
@@ -489,6 +502,21 @@ export default function TransferPage() {
         </CardContent>
       </Card>
 
+      <VerificationModal
+        transactionId={pendingTransactionId}
+        isOpen={showVerification}
+        onClose={() => {
+          setShowVerification(false);
+          setPendingTransactionId(null);
+        }}
+        onSuccess={() => {
+          setShowVerification(false);
+          setPendingTransactionId(null);
+          setShowConfirmStep(false);
+          toast.success('Prenos je uspešno verifikovan!');
+          navigate('/accounts');
+        }}
+      />
     </div>
   );
 }

@@ -116,7 +116,19 @@ export default function PaymentHistoryPage() {
           limit,
         });
 
-        setTransactions(asArray<Transaction>(response.content));
+        const normalized = asArray<Transaction>(response.content).map((tx) => {
+          const t = tx as unknown as Record<string, unknown>;
+          return {
+            ...tx,
+            fromAccountNumber: tx.fromAccountNumber || (t.fromAccount as string) || '',
+            toAccountNumber: tx.toAccountNumber || (t.toAccount as string) || '',
+            paymentPurpose: tx.paymentPurpose || (t.description as string) || '',
+            currency: tx.currency || (t.currency as string) || (t.fromCurrency as string) || '',
+            amount: typeof tx.amount === 'number' ? tx.amount : Number(tx.amount),
+          } as Transaction;
+        });
+
+        setTransactions(normalized);
         setTotalPages(Math.max(1, response.totalPages ?? 1));
       } catch {
         toast.error('Neuspesno ucitavanje placanja.');
@@ -466,8 +478,8 @@ export default function PaymentHistoryPage() {
                         <tbody>
                           <tr className="border-b hover:bg-muted/50 transition-colors">
                             <td className="py-2">{formatDateTime(tx.createdAt)}</td>
-                            <td className="py-2">{tx.fromAccountNumber}</td>
-                            <td className="py-2">{tx.toAccountNumber}</td>
+                            <td className="py-2">{tx.fromAccountNumber || '-'}</td>
+                            <td className="py-2">{tx.toAccountNumber || '-'}</td>
                             <td className="py-2">
                               {formatAmount(tx.amount)} {tx.currency}
                             </td>

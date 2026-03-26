@@ -54,6 +54,7 @@ export default function NewPaymentPage() {
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<NewPaymentFormData>({
     resolver: zodResolver(newPaymentSchema),
@@ -142,7 +143,9 @@ export default function NewPaymentPage() {
       toast.info('Placanje je kreirano. Potrebna je verifikacija.');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Kreiranje placanja nije uspelo.');
+      const msg = error.response?.data?.message || 'Kreiranje placanja nije uspelo.';
+      toast.error(msg);
+      reset();
     } finally {
       setIsSubmitting(false);
     }
@@ -321,8 +324,16 @@ export default function NewPaymentPage() {
         transactionId={pendingTransactionId}
         isOpen={showVerification}
         onClose={() => setShowVerification(false)}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowVerification(false);
+          const toAcc = watch('toAccountNumber');
+          const recipName = watch('recipientName') || 'Novi primalac';
+          if (toAcc && !recipients.some(r => r.accountNumber === toAcc)) {
+            try {
+              await paymentRecipientService.create({ name: recipName, accountNumber: toAcc });
+              toast.success('Primalac sacuvan u sablone.');
+            } catch { /* ignore */ }
+          }
           navigate('/payments/history');
         }}
       />

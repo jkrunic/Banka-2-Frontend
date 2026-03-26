@@ -80,7 +80,8 @@ export default function ClientSidebar() {
       { label: 'Plaćanja', path: '/payments/new', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Primaoci', path: '/payments/recipients', icon: <BookUser className="h-4 w-4" /> },
       { label: 'Prenosi', path: '/transfers', icon: <ArrowLeftRight className="h-4 w-4" /> },
-      { label: 'Istorija', path: '/payments/history', icon: <History className="h-4 w-4" /> },
+      { label: 'Istorija prenosa', path: '/transfers/history', icon: <ArrowLeftRight className="h-4 w-4" /> },
+      { label: 'Istorija placanja', path: '/payments/history', icon: <History className="h-4 w-4" /> },
       { label: 'Menjačnica', path: '/exchange', icon: <RefreshCw className="h-4 w-4" /> },
       { label: 'Kartice', path: '/cards', icon: <CreditCard className="h-4 w-4" /> },
       { label: 'Krediti', path: '/loans', icon: <FileText className="h-4 w-4" /> },
@@ -150,6 +151,7 @@ export default function ClientSidebar() {
                 to={item.path}
                 className={linkClassName}
                 onClick={() => setOpen(false)}
+                end={item.path === '/transfers'}
               >
                 {item.icon}
                 <span>{item.label}</span>

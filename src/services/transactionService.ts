@@ -38,6 +38,7 @@ export const transactionService = {
   getAll: async (filters?: TransactionFilters): Promise<PaginatedResponse<Transaction>> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
+    if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
     if (filters?.dateFrom) params.append('fromDate', filters.dateFrom);
     if (filters?.dateTo) params.append('toDate', filters.dateTo);
     if (filters?.amountMin !== undefined) params.append('minAmount', String(filters.amountMin));
@@ -66,8 +67,12 @@ export const transactionService = {
     return response.data;
   },
 
-  getTransfers: async (): Promise<Transfer[]> => {
-    const response = await api.get<Transfer[]>('/transfers');
+  getTransfers: async (filters?: { accountNumber?: string; dateFrom?: string; dateTo?: string }): Promise<Transfer[]> => {
+    const params = new URLSearchParams();
+    if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
+    if (filters?.dateFrom) params.append('fromDate', filters.dateFrom);
+    if (filters?.dateTo) params.append('toDate', filters.dateTo);
+    const response = await api.get<Transfer[]>('/transfers', { params });
     return response.data;
   },
 };

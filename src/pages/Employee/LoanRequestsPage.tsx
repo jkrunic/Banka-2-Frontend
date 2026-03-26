@@ -235,6 +235,7 @@ export default function LoanRequestsPage() {
                                   onClick={() => {
                                     setRejectingLoanId(request.id);
                                     setRejectReason('');
+                                    setExpandedId(request.id);
                                   }}
                                   disabled={processingId === request.id}
                                 >

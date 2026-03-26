@@ -1,11 +1,18 @@
 /// <reference types="cypress" />
+function _b64url(s) { return btoa(s).split('=').join('').split('+').join('-').split('/').join('_'); }
+function _fakeJwt(role, email) {
+  return _b64url(JSON.stringify({alg:'HS256',typ:'JWT'})) + '.' +
+    _b64url(JSON.stringify({sub:email,role:role,active:true,exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000)})) +
+    '.fakesig';
+}
+
 
 describe('Dashboard - Prikaz kartice i statistike', () => {
   const setSession = (
     win: Window,
     user: { id: number; email: string; username: string; firstName: string; lastName: string; permissions: string[] }
   ) => {
-    win.sessionStorage.setItem('accessToken', 'fake-access-token');
+    win.sessionStorage.setItem('accessToken', _fakeJwt(user.permissions.includes('ADMIN') ? 'ADMIN' : 'CLIENT', user.email));
     win.sessionStorage.setItem('refreshToken', 'fake-refresh-token');
     win.sessionStorage.setItem('user', JSON.stringify(user));
   };

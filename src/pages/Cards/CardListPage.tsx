@@ -105,6 +105,23 @@ export default function CardListPage() {
       toast.error('Izaberite račun za karticu.');
       return;
     }
+
+    // Provera limita: max 2 kartice po licnom racunu
+    const selectedAccount = accounts.find((a) => String(a.id) === selectedAccountId);
+    const cardsForAccount = asArray<Card>(cards).filter(
+      (c) => c.accountNumber === selectedAccount?.accountNumber && c.status !== 'DEACTIVATED'
+    );
+    const isBusiness = selectedAccount?.accountType === 'BUSINESS' || selectedAccount?.accountType === 'POSLOVNI';
+    const maxCards = isBusiness ? 1 : 2;
+    if (cardsForAccount.length >= maxCards) {
+      toast.error(
+        isBusiness
+          ? 'Poslovni račun može imati maksimalno 1 karticu po ovlašćenom licu.'
+          : 'Lični račun može imati maksimalno 2 kartice.'
+      );
+      return;
+    }
+
     setCreatingCard(true);
     try {
       await cardService.submitRequest({
@@ -357,7 +374,8 @@ export default function CardListPage() {
                         size="sm"
                         className="flex-1"
                         onClick={() => runCardAction(card.id, 'limit')}
-                        disabled={processingCardId === card.id}
+                        disabled={processingCardId === card.id || card.status === 'BLOCKED'}
+                        title={card.status === 'BLOCKED' ? 'Promena limita nije dozvoljena dok je kartica blokirana' : undefined}
                       >
                         Promeni limit
                       </Button>

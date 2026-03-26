@@ -46,6 +46,7 @@ export default function LoanListPage() {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
+  const [processingEarlyRepayment, setProcessingEarlyRepayment] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -252,9 +253,38 @@ export default function LoanListPage() {
               </div>
             )}
 
-            <p className="text-sm text-muted-foreground">
-              Placeno rata: {paidInstallments} / {asArray<Installment>(installments).length}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Placeno rata: {paidInstallments} / {asArray<Installment>(installments).length}
+              </p>
+              {selectedLoan.status === 'ACTIVE' && selectedLoan.remainingDebt > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={processingEarlyRepayment}
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      `Da li ste sigurni da želite prevremenu otplatu kredita?\nPreostali dug: ${formatAmount(selectedLoan.remainingDebt)} ${selectedLoan.currency}`
+                    );
+                    if (!confirmed) return;
+                    setProcessingEarlyRepayment(true);
+                    try {
+                      await creditService.earlyRepayment(selectedLoan.id);
+                      toast.success('Zahtev za prevremenu otplatu je uspešno podnet.');
+                      const data = await creditService.getMyLoans();
+                      setLoans(asArray<Loan>(data));
+                      setSelectedLoan(null);
+                    } catch {
+                      toast.error('Prevremena otplata nije uspela.');
+                    } finally {
+                      setProcessingEarlyRepayment(false);
+                    }
+                  }}
+                >
+                  {processingEarlyRepayment ? 'Obrada...' : 'Prevremena otplata'}
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

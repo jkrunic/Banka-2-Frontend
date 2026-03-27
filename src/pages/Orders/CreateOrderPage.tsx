@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  CalendarClock,
   Clock3,
   FilePlus2,
   Loader2,
@@ -24,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { accountService } from '@/services/accountService';
+import exchangeManagementService from '@/services/exchangeManagementService';
 import listingService from '@/services/listingService';
 import orderService from '@/services/orderService';
 import { Permission } from '@/types';
@@ -400,6 +402,8 @@ export default function CreateOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<CreateOrderFormValues | null>(null);
+  const [exchangeApiOpen, setExchangeApiOpen] = useState<{ isOpen: boolean; name: string } | null>(null);
+  const [exchangeApiLoading, setExchangeApiLoading] = useState(false);
 
   const canUseMargin = isAdmin || hasPermission(Permission.TRADE_STOCKS);
 
@@ -570,6 +574,41 @@ export default function CreateOrderPage() {
     }
   }, [canUseMargin, setValue]);
 
+  // Fetch exchange open/closed status from API when listing changes
+  useEffect(() => {
+    const selectedListingObj = listings.find((l) => l.id === Number(listingId)) ?? null;
+    if (!selectedListingObj?.exchangeAcronym) {
+      setExchangeApiOpen(null);
+      return;
+    }
+
+    let cancelled = false;
+    setExchangeApiLoading(true);
+
+    exchangeManagementService
+      .getByAcronym(selectedListingObj.exchangeAcronym)
+      .then((exchange) => {
+        if (!cancelled) {
+          setExchangeApiOpen({ isOpen: exchange.isOpen, name: exchange.name });
+        }
+      })
+      .catch(() => {
+        // 404 or unavailable — don't show warning
+        if (!cancelled) {
+          setExchangeApiOpen(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setExchangeApiLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listings, listingId]);
+
   const selectedListing = useMemo(
     () => listings.find((listing) => listing.id === Number(listingId)) ?? null,
     [listings, listingId]
@@ -604,6 +643,23 @@ export default function CreateOrderPage() {
   const totalAmount = approximatePrice + commission;
   const pricingCurrency = getPricingCurrency(selectedListing);
   const marketStatus = getExchangeStatus(selectedListing);
+
+  // Settlement date warnings for FUTURES
+  const settlementInfo = useMemo(() => {
+    if (!selectedListing || selectedListing.listingType !== ListingType.FUTURES || !selectedListing.settlementDate) {
+      return null;
+    }
+    const settlement = new Date(selectedListing.settlementDate);
+    const now = new Date();
+    const diffMs = settlement.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const isPast = diffDays < 0;
+    const isWithin7Days = diffDays >= 0 && diffDays <= 7;
+    const formattedDate = settlement.toLocaleDateString('sr-RS');
+    return { isPast, isWithin7Days, diffDays, formattedDate };
+  }, [selectedListing]);
+
+  const settlementBlocksSubmit = settlementInfo?.isPast === true;
 
   const canCompareBalance = Boolean(
     selectedAccount?.currency && selectedAccount.currency === pricingCurrency
@@ -655,6 +711,11 @@ export default function CreateOrderPage() {
 
   const openConfirmation = (data: CreateOrderFormValues) => {
     const nextOrder = buildCreateOrderPayload(data, canUseMargin);
+
+    if (settlementBlocksSubmit) {
+      toast.error('Datum dospeća za ovaj futures ugovor je prošao. Nalog nije moguće kreirati.');
+      return;
+    }
 
     if (insufficientFunds) {
       toast.error('Procena ukupnog troška prelazi raspoloživo stanje izabranog računa.');
@@ -1009,9 +1070,66 @@ export default function CreateOrderPage() {
                     </div>
                   )}
 
+                  {/* Commission preview */}
+                  {selectedListing && safeQuantity > 0 && (
+                    <div className="rounded-md border bg-muted/30 p-4 space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Približna cena</span>
+                        <span className="font-mono font-medium">
+                          {formatAmount(approximatePrice)} {pricingCurrency}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Provizija</span>
+                        <span className="font-mono font-medium">
+                          {formatAmount(commission)} {pricingCurrency}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-2">
+                        <span className="font-medium">Ukupno sa provizijom</span>
+                        <span className="font-mono font-semibold">
+                          {formatAmount(totalAmount)} {pricingCurrency}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exchange API: after-hours warning */}
+                  {!exchangeApiLoading && exchangeApiOpen && !exchangeApiOpen.isOpen && (
+                    <Alert variant="warning">
+                      <TriangleAlert className="h-4 w-4" />
+                      <AlertTitle>Berza zatvorena</AlertTitle>
+                      <AlertDescription>
+                        Berza {exchangeApiOpen.name} je trenutno zatvorena. Order ce biti izvrsen kada se berza otvori.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Settlement date warnings for Futures */}
+                  {settlementInfo?.isPast && (
+                    <Alert variant="destructive">
+                      <CalendarClock className="h-4 w-4" />
+                      <AlertTitle>Datum dospeca je prosao</AlertTitle>
+                      <AlertDescription>
+                        Datum dospeca za ovaj futures ugovor ({settlementInfo.formattedDate}) je prosao. Nije moguce kreirati nalog.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {settlementInfo?.isWithin7Days && !settlementInfo.isPast && (
+                    <Alert variant="warning">
+                      <CalendarClock className="h-4 w-4" />
+                      <AlertTitle>Datum dospeca se priblizava</AlertTitle>
+                      <AlertDescription>
+                        Datum dospeca za ovaj futures ugovor je {settlementInfo.formattedDate} (jos {settlementInfo.diffDays} dana). Razmotrite rizike pre kreiranja naloga.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="flex justify-end">
                     <Button
                       type="submit"
+                      disabled={settlementBlocksSubmit}
                       className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
                     >
                       Nastavi na potvrdu

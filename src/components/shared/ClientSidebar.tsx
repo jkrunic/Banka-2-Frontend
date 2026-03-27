@@ -23,6 +23,8 @@ import {
   Briefcase,
   ShoppingCart,
   Calculator,
+  Globe,
+  Landmark,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -89,6 +91,7 @@ export default function ClientSidebar() {
       { label: 'Menjacnica', path: '/exchange', icon: <RefreshCw className="h-4 w-4" /> },
       { label: 'Kartice', path: '/cards', icon: <CreditCard className="h-4 w-4" /> },
       { label: 'Krediti', path: '/loans', icon: <FileText className="h-4 w-4" /> },
+      { label: 'Marzni racuni', path: '/margin-accounts', icon: <Landmark className="h-4 w-4" /> },
     ],
     []
   );
@@ -104,6 +107,7 @@ export default function ClientSidebar() {
 
   const employeeLinks: SidebarItem[] = useMemo(
     () => [
+      { label: 'Dashboard', path: '/employee/dashboard', icon: <TrendingUp className="h-4 w-4" /> },
       { label: 'Zaposleni', path: '/admin/employees', icon: <Users className="h-4 w-4" /> },
       { label: 'Portal racuna', path: '/employee/accounts', icon: <Building2 className="h-4 w-4" /> },
       { label: 'Zahtevi za racune', path: '/employee/account-requests', icon: <Wallet className="h-4 w-4" /> },
@@ -115,6 +119,7 @@ export default function ClientSidebar() {
       { label: 'Orderi', path: '/employee/orders', icon: <ShoppingCart className="h-4 w-4" /> },
       { label: 'Aktuari', path: '/employee/actuaries', icon: <TrendingUp className="h-4 w-4" /> },
       { label: 'Porez', path: '/employee/tax', icon: <Calculator className="h-4 w-4" /> },
+      { label: 'Berze', path: '/employee/exchanges', icon: <Globe className="h-4 w-4" /> },
     ],
     []
   );

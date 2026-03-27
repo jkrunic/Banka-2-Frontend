@@ -1,5 +1,5 @@
 import api from './api';
-import type { Listing, ListingDailyPrice, PaginatedResponse } from '../types/celina3';
+import type { Listing, ListingDailyPrice, OptionChain, PaginatedResponse } from '../types/celina3';
 
 const listingService = {
   /**
@@ -45,6 +45,18 @@ const listingService = {
    */
   refresh: async (): Promise<void> => {
     await api.post('/listings/refresh');
+  },
+
+  /**
+   * GET /options?stockListingId={id}
+   * Dohvata lanac opcija za akciju.
+   * FIXME: Backend mozda jos nije implementirao ovaj endpoint.
+   */
+  getOptions: async (listingId: number): Promise<OptionChain[]> => {
+    const response = await api.get('/options', {
+      params: { stockListingId: listingId },
+    });
+    return response.data;
   },
 };
 

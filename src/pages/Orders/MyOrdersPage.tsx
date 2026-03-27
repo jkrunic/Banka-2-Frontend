@@ -1,3 +1,36 @@
+/*
+ * =============================================================================
+ * TODO [Elena - GitHub Issue #60]: Poboljšanja MyOrdersPage
+ * =============================================================================
+ *
+ * G1. EXECUTION PROGRESS BAR (P1):
+ *   - Za svaki order koji ima remainingPortions < quantity, prikazati progress bar
+ *   - Iznad ili ispod status badge-a u tabeli
+ *   - Formula: progress = ((quantity - remainingPortions) / quantity) * 100
+ *   - Tekst: "Izvršeno: {quantity - remainingPortions}/{quantity} ({progress}%)"
+ *   - Koristiti: <div className="h-2 rounded-full bg-muted overflow-hidden">
+ *                  <div className="h-full bg-emerald-500 rounded-full" style={{width: `${progress}%`}} />
+ *                </div>
+ *   - Samo za ordere sa statusom APPROVED ili DONE
+ *
+ * G2. CANCEL ORDER DUGME (P1):
+ *   - Dodati dugme "Otkaži" u akcije kolonu za PENDING i APPROVED ordere
+ *   - NE prikazivati za DONE, DECLINED
+ *   - Na klik: otvori shadcn AlertDialog sa pitanjem "Da li ste sigurni?"
+ *   - Na potvrdu: pozovi orderService.decline(orderId) ili novi cancelOrder(orderId)
+ *   - Na uspeh: toast.success('Order je otkazan'), ponovo učitaj listu
+ *   - Dugme styling: <Button variant="outline" size="sm" className="text-destructive">
+ *
+ * G3. REAL-TIME POLLING (P2 - bonus):
+ *   - Ako postoje orderi sa statusom APPROVED, pokreni polling svakih 5s
+ *   - useEffect sa setInterval koji ponovo fetchuje ordere
+ *   - Kad svi APPROVED orderi postanu DONE/DECLINED, zaustavi polling
+ *   - Cleanup: clearInterval u return funkciji useEffect-a
+ *   - Pazi na memory leak: proveri mounted flag
+ *
+ * =============================================================================
+ */
+
 import * as Dialog from '@radix-ui/react-dialog';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {

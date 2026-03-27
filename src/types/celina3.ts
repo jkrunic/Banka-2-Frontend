@@ -194,6 +194,7 @@ export interface Exchange {
   openTime: string;
   closeTime: string;
   isOpen: boolean;
+  testMode?: boolean;
 }
 
 // --- Opcije ---
@@ -211,6 +212,25 @@ export interface StockOption {
   ask: number;
   bid: number;
   volume: number;
+}
+
+export interface OptionItem {
+  id: number;
+  strikePrice: number;
+  bid: number;
+  ask: number;
+  price: number;
+  volume: number;
+  openInterest: number;
+  impliedVolatility: number;
+  inTheMoney: boolean;
+}
+
+export interface OptionChain {
+  settlementDate: string;
+  calls: OptionItem[];
+  puts: OptionItem[];
+  currentStockPrice: number;
 }
 
 // --- Paginated response ---

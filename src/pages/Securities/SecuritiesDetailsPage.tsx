@@ -14,13 +14,29 @@ import {
   Layers,
   Shield,
   Clock,
+  Link2,
 } from 'lucide-react';
-import type { Listing, ListingDailyPrice } from '@/types/celina3';
+import type { Listing, ListingDailyPrice, OptionChain } from '@/types/celina3';
 import listingService from '@/services/listingService';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const PERIODS = [
   { key: 'DAY', label: '1D', days: 24 },
@@ -103,6 +119,13 @@ export default function SecuritiesDetailsPage() {
   const [orderQuantity, setOrderQuantity] = useState('1');
   const [orderType, setOrderType] = useState('MARKET');
 
+  // Options chain state
+  const [optionChains, setOptionChains] = useState<OptionChain[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState(false);
+  const [selectedSettlementDate, setSelectedSettlementDate] = useState<string>('');
+  const [strikeCountFilter, setStrikeCountFilter] = useState<string>('ALL');
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -123,6 +146,62 @@ export default function SecuritiesDetailsPage() {
     load();
     return () => { cancelled = true; };
   }, [id, period]);
+
+  // Load options chain for stocks
+  useEffect(() => {
+    if (!id || !listing || listing.listingType !== 'STOCK') return;
+    let cancelled = false;
+    const loadOptions = async () => {
+      setOptionsLoading(true);
+      setOptionsError(false);
+      try {
+        const data = await listingService.getOptions(Number(id));
+        if (!cancelled) {
+          setOptionChains(Array.isArray(data) ? data : []);
+          if (Array.isArray(data) && data.length > 0) {
+            setSelectedSettlementDate(data[0].settlementDate);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setOptionsError(true);
+          setOptionChains([]);
+        }
+      } finally {
+        if (!cancelled) setOptionsLoading(false);
+      }
+    };
+    loadOptions();
+    return () => { cancelled = true; };
+  }, [id, listing]);
+
+  // Compute filtered options for the selected settlement date
+  const selectedChain = useMemo(() => {
+    return optionChains.find((c) => c.settlementDate === selectedSettlementDate) ?? null;
+  }, [optionChains, selectedSettlementDate]);
+
+  const filteredStrikes = useMemo(() => {
+    if (!selectedChain) return { calls: [], puts: [] };
+    const allCalls = [...selectedChain.calls].sort((a, b) => a.strikePrice - b.strikePrice);
+    const allPuts = [...selectedChain.puts].sort((a, b) => a.strikePrice - b.strikePrice);
+
+    // Collect all unique strike prices
+    const allStrikePrices = [...new Set([...allCalls.map((c) => c.strikePrice), ...allPuts.map((p) => p.strikePrice)])].sort((a, b) => a - b);
+
+    if (strikeCountFilter === 'ALL') return { calls: allCalls, puts: allPuts, strikes: allStrikePrices };
+
+    const count = parseInt(strikeCountFilter);
+    const currentPrice = selectedChain.currentStockPrice;
+    // Find the closest strikes around the current price
+    const sorted = [...allStrikePrices].sort((a, b) => Math.abs(a - currentPrice) - Math.abs(b - currentPrice));
+    const selectedStrikes = new Set(sorted.slice(0, count));
+
+    return {
+      calls: allCalls.filter((c) => selectedStrikes.has(c.strikePrice)),
+      puts: allPuts.filter((p) => selectedStrikes.has(p.strikePrice)),
+      strikes: allStrikePrices.filter((s) => selectedStrikes.has(s)),
+    };
+  }, [selectedChain, strikeCountFilter]);
 
   // Generate fake data when history is empty
   const chartData = useMemo(() => {
@@ -406,6 +485,156 @@ export default function SecuritiesDetailsPage() {
                     value={formatVolume(chartData.reduce((s, d) => s + d.volume, 0))}
                   />
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Options Chain - only for stocks */}
+          {listing.listingType === 'STOCK' && (
+            <Card className="border-border/50 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+                    <Link2 className="h-4 w-4 text-indigo-500" />
+                    Lanac opcija
+                  </CardTitle>
+                  {optionChains.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedSettlementDate} onValueChange={setSelectedSettlementDate}>
+                        <SelectTrigger className="w-[180px] h-8 text-xs">
+                          <SelectValue placeholder="Datum dospeća" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {optionChains.map((chain) => (
+                            <SelectItem key={chain.settlementDate} value={chain.settlementDate}>
+                              {new Date(chain.settlementDate).toLocaleDateString('sr-RS')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={strikeCountFilter} onValueChange={setStrikeCountFilter}>
+                        <SelectTrigger className="w-[100px] h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="ALL">Sve</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {optionsLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-8 animate-pulse rounded bg-muted" />
+                    ))}
+                  </div>
+                ) : optionsError || optionChains.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="rounded-full bg-muted p-3 mb-3">
+                      <Link2 className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Opcije nisu dostupne za ovu hartiju
+                    </p>
+                  </div>
+                ) : selectedChain ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-center text-xs font-semibold">Call Bid</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Call Ask</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Call Last</TableHead>
+                          <TableHead className="text-center text-xs font-bold bg-muted/30">Strike</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Put Bid</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Put Ask</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Put Last</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const strikes = filteredStrikes.strikes ?? [];
+                          const callMap = new Map(filteredStrikes.calls.map((c) => [c.strikePrice, c]));
+                          const putMap = new Map(filteredStrikes.puts.map((p) => [p.strikePrice, p]));
+                          const currentPrice = selectedChain.currentStockPrice;
+                          let separatorInserted = false;
+
+                          const rows: React.ReactNode[] = [];
+
+                          for (let i = 0; i < strikes.length; i++) {
+                            const strike = strikes[i];
+                            const call = callMap.get(strike);
+                            const put = putMap.get(strike);
+                            const callITM = strike < currentPrice;
+                            const putITM = strike > currentPrice;
+
+                            // Insert current price separator
+                            if (!separatorInserted && strike >= currentPrice) {
+                              separatorInserted = true;
+                              rows.push(
+                                <TableRow key="separator" className="border-0">
+                                  <TableCell colSpan={7} className="p-0">
+                                    <div className="flex items-center gap-2 py-1">
+                                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
+                                      <span className="text-[10px] font-mono font-bold text-indigo-500 whitespace-nowrap">
+                                        Trenutna cena: {formatPrice(currentPrice)}
+                                      </span>
+                                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }
+
+                            rows.push(
+                              <TableRow
+                                key={strike}
+                                className={`transition-colors ${
+                                  callITM
+                                    ? 'bg-emerald-500/10 hover:bg-emerald-500/15'
+                                    : putITM
+                                    ? 'bg-emerald-500/10 hover:bg-emerald-500/15'
+                                    : 'bg-red-500/10 hover:bg-red-500/15'
+                                }`}
+                              >
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {call ? formatPrice(call.bid) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {call ? formatPrice(call.ask) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums font-semibold">
+                                  {call ? formatPrice(call.price) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums font-bold bg-muted/30">
+                                  {formatPrice(strike)}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {put ? formatPrice(put.bid) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {put ? formatPrice(put.ask) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums font-semibold">
+                                  {put ? formatPrice(put.price) : '-'}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }
+
+                          return rows;
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           )}

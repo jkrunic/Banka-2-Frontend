@@ -48,6 +48,9 @@ import MyOrdersPage from './pages/Orders/MyOrdersPage';
 import PortfolioPage from './pages/Portfolio/PortfolioPage';
 import ActuaryManagementPage from './pages/Actuary/ActuaryManagementPage';
 import TaxPortalPage from './pages/Tax/TaxPortalPage';
+import ExchangesPage from './pages/Exchanges/ExchangesPage';
+import MarginAccountsPage from './pages/Margin/MarginAccountsPage';
+import SupervisorDashboardPage from './pages/Employee/SupervisorDashboardPage';
 
 export default function App() {
   return (
@@ -83,6 +86,7 @@ export default function App() {
           <Route path="/cards" element={<CardListPage />} />
           <Route path="/loans" element={<LoanListPage />} />
           <Route path="/loans/apply" element={<LoanApplicationPage />} />
+          <Route path="/margin-accounts" element={<MarginAccountsPage />} />
 
           {/* Admin rute - Celina 1 (zaposleni CRUD) */}
           <Route element={<ProtectedRoute adminOnly />}>
@@ -136,10 +140,16 @@ export default function App() {
             <Route path="/employee/orders" element={<OrdersListPage />} />
           </Route>
           <Route element={<ProtectedRoute adminOnly />}>
+            <Route path="/employee/dashboard" element={<SupervisorDashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute adminOnly />}>
             <Route path="/employee/actuaries" element={<ActuaryManagementPage />} />
           </Route>
           <Route element={<ProtectedRoute adminOnly />}>
             <Route path="/employee/tax" element={<TaxPortalPage />} />
+          </Route>
+          <Route element={<ProtectedRoute adminOnly />}>
+            <Route path="/employee/exchanges" element={<ExchangesPage />} />
           </Route>
         </Route>
       </Route>

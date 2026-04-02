@@ -67,6 +67,11 @@ export const creditService = {
     await api.post(`/loans/${loanId}/early-repayment`);
   },
 
+  getMyRequests: async (): Promise<LoanRequest[]> => {
+    const response = await api.get<LoanRequest[]>('/loans/requests/my');
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
   getRequests: async (filters?: LoanFilters): Promise<PaginatedResponse<LoanRequest>> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);

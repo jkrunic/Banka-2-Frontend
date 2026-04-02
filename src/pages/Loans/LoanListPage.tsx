@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Inbox, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { creditService } from '@/services/creditService';
-import type { Installment, Loan } from '@/types/celina2';
+import type { Installment, Loan, LoanRequest } from '@/types/celina2';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +56,7 @@ function formatDate(value: string | null | undefined): string {
 export default function LoanListPage() {
   const navigate = useNavigate();
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<LoanRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [installments, setInstallments] = useState<Installment[]>([]);
@@ -66,11 +67,16 @@ export default function LoanListPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await creditService.getMyLoans();
-        const sorted = asArray<Loan>(data).sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
+        const [loansData, requestsData] = await Promise.all([
+          creditService.getMyLoans(),
+          creditService.getMyRequests().catch(() => []),
+        ]);
+        const sorted = asArray<Loan>(loansData).sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
         setLoans(sorted);
+        setPendingRequests(asArray<LoanRequest>(requestsData).filter(r => r.status === 'PENDING' || r.status === 'REJECTED'));
       } catch {
         setLoans([]);
+        setPendingRequests([]);
       } finally {
         setLoading(false);
       }
@@ -149,7 +155,33 @@ export default function LoanListPage() {
             </Card>
           ))}
         </div>
-      ) : asArray<Loan>(loans).length === 0 ? (
+      ) : <>
+
+      {/* Zahtevi na cekanju */}
+      {pendingRequests.length > 0 && (
+        <div className="space-y-3 mb-6">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Zahtevi za kredit</h3>
+          {pendingRequests.map((req) => (
+            <Card key={req.id} className={`border-l-4 ${req.status === 'REJECTED' ? 'border-l-red-500' : 'border-l-amber-500'}`}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{req.loanType} kredit</p>
+                    <p className="text-sm text-muted-foreground">
+                      Iznos: <span className="font-mono">{formatAmount(req.amount)}</span> {req.currency} · Period: {req.repaymentPeriod} meseci
+                    </p>
+                  </div>
+                  <Badge variant={req.status === 'REJECTED' ? 'destructive' : 'warning'}>
+                    {req.status === 'REJECTED' ? 'Odbijen' : 'Na čekanju'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {asArray<Loan>(loans).length === 0 && pendingRequests.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -246,6 +278,22 @@ export default function LoanListPage() {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Kraj</p>
                 <p className="text-lg font-bold mt-0.5">{formatDate(selectedLoan.endDate)}</p>
               </div>
+              <div className="rounded-lg border p-3 bg-amber-500/10 border-amber-500/30">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Ukupna kamata</p>
+                <p className="text-lg font-bold mt-0.5 text-amber-600 dark:text-amber-400">
+                  {formatAmount(
+                    installments.reduce((sum, inst) => sum + (inst.interestAmount ?? 0), 0)
+                  )} {selectedLoan.currency}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Ukupno za otplatu</p>
+                <p className="text-lg font-bold mt-0.5">
+                  {formatAmount(
+                    (selectedLoan.amount ?? 0) + installments.reduce((sum, inst) => sum + (inst.interestAmount ?? 0), 0)
+                  )} {selectedLoan.currency}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -282,6 +330,8 @@ export default function LoanListPage() {
                     <TableRow>
                       <TableHead className="w-16">Rata</TableHead>
                       <TableHead>Iznos</TableHead>
+                      <TableHead>Glavnica</TableHead>
+                      <TableHead>Kamata</TableHead>
                       <TableHead>Datum dospeca</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
@@ -291,6 +341,8 @@ export default function LoanListPage() {
                       <TableRow key={installment.id} className="hover:bg-muted/50 transition-colors">
                         <TableCell className="font-medium">{index + 1}</TableCell>
                         <TableCell className="font-semibold tabular-nums">{formatAmount(installment.amount)} {installment.currency}</TableCell>
+                        <TableCell className="tabular-nums">{formatAmount(installment.principalAmount ?? 0)}</TableCell>
+                        <TableCell className="tabular-nums text-amber-600 dark:text-amber-400">{formatAmount(installment.interestAmount ?? 0)}</TableCell>
                         <TableCell>{formatDate(installment.expectedDueDate)}</TableCell>
                         <TableCell>
                           <Badge variant={installment.paid ? 'success' : 'secondary'}>
@@ -315,8 +367,18 @@ export default function LoanListPage() {
                   disabled={processingEarlyRepayment}
                   className="hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-colors"
                   onClick={async () => {
+                    const unpaidInterest = asArray<Installment>(installments)
+                      .filter(i => !i.paid)
+                      .reduce((sum, i) => sum + (i.interestAmount ?? 0), 0);
+                    const totalPayoff = (selectedLoan.remainingDebt ?? 0) + unpaidInterest;
+
                     const confirmed = window.confirm(
-                      `Da li ste sigurni da želite prevremenu otplatu kredita?\nPreostali dug: ${formatAmount(selectedLoan.remainingDebt)} ${selectedLoan.currency}`
+                      `Prevremena otplata kredita\n\n` +
+                      `Preostala glavnica: ${formatAmount(selectedLoan.remainingDebt)} ${selectedLoan.currency}\n` +
+                      `Preostala kamata: ${formatAmount(unpaidInterest)} ${selectedLoan.currency}\n` +
+                      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                      `UKUPNO za otplatu: ${formatAmount(totalPayoff)} ${selectedLoan.currency}\n\n` +
+                      `Da li želite da nastavite?`
                     );
                     if (!confirmed) return;
                     setProcessingEarlyRepayment(true);
@@ -340,6 +402,7 @@ export default function LoanListPage() {
           </CardContent>
         </Card>
       )}
+      </>}
     </div>
   );
 }

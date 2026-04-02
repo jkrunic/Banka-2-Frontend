@@ -57,7 +57,6 @@ export default function TransferPage() {
   const [submittedData, setSubmittedData] = useState<TransferFormData | null>(null);
 
   const [showVerification, setShowVerification] = useState(false);
-  const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
 
   const [exchangePreview, setExchangePreview] = useState<{
     rate: number;
@@ -205,7 +204,7 @@ export default function TransferPage() {
   const commission = useMemo(() => {
     if (!amount || amount <= 0) return 0;
     if (fromAccountData?.currency === toAccountData?.currency) return 0;
-    return amount * 0.01;
+    return amount * 0.005;
   }, [amount, fromAccountData, toAccountData]);
 
   const totalDebit = useMemo(() => {
@@ -244,29 +243,24 @@ export default function TransferPage() {
 
   const handleConfirmTransfer = async () => {
     if (!submittedData) return;
+    // Otvori OTP modal - transfer se NE izvrsava dok se ne unese kod
+    setShowVerification(true);
+  };
 
-    setIsSubmitting(true);
+  const executeTransferWithOtp = async (otpCode: string) => {
+    if (!submittedData) throw new Error('Nema podataka za prenos');
 
     try {
-      // Auto-detect: if currencies differ, server-side routes to FX
-      const result = await transactionService.createTransfer({
+      await transactionService.createTransfer({
         fromAccountNumber: submittedData.fromAccountNumber,
         toAccountNumber: submittedData.toAccountNumber,
         amount: Number(submittedData.amount),
-      });
+      }, otpCode);
 
-      // Otvori verifikacioni modal
-      const txId = (result as unknown as { id?: number })?.id;
-      if (txId) {
-        setPendingTransactionId(txId);
-        setShowVerification(true);
-        toast.info('Prenos je kreiran. Potrebna je verifikacija.');
-      } else {
-        // Fallback: ako backend ne vraca ID, prenos je direktno izvrsen
-        setShowConfirmStep(false);
-        toast.success('Prenos je uspešno izvršen!');
-        navigate('/accounts');
-      }
+      setShowVerification(false);
+      setShowConfirmStep(false);
+      toast.success('Prenos je uspešno izvršen!');
+      navigate('/accounts');
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Kreiranje prenosa nije uspelo.'));
     } finally {
@@ -509,19 +503,9 @@ export default function TransferPage() {
       </Card>
 
       <VerificationModal
-        transactionId={pendingTransactionId}
         isOpen={showVerification}
-        onClose={() => {
-          setShowVerification(false);
-          setPendingTransactionId(null);
-        }}
-        onSuccess={() => {
-          setShowVerification(false);
-          setPendingTransactionId(null);
-          setShowConfirmStep(false);
-          toast.success('Prenos je uspešno verifikovan!');
-          navigate('/accounts');
-        }}
+        onClose={() => setShowVerification(false)}
+        onVerified={executeTransferWithOtp}
       />
     </div>
   );

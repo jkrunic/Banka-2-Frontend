@@ -45,16 +45,15 @@ export default function NewPaymentPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recipients, setRecipients] = useState<PaymentRecipient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
-  const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
-    reset,
+    getValues,
     formState: { errors },
   } = useForm<NewPaymentFormData>({
     resolver: zodResolver(newPaymentSchema),
@@ -123,32 +122,10 @@ export default function NewPaymentPage() {
     return map;
   }, [accounts]);
 
-  const onSubmit = async (data: NewPaymentFormData) => {
-    setIsSubmitting(true);
-    try {
-      const result = await transactionService.createPayment({
-        fromAccountNumber: data.fromAccountNumber,
-        toAccountNumber: data.toAccountNumber,
-        amount: data.amount,
-        recipientName: data.recipientName,
-        paymentCode: data.paymentCode,
-        paymentPurpose: data.paymentPurpose,
-        model: data.model || undefined,
-        callNumber: data.callNumber || undefined,
-        referenceNumber: data.referenceNumber || undefined,
-      });
-
-      setPendingTransactionId(result.id);
-      setShowVerification(true);
-      toast.info('Placanje je kreirano. Potrebna je verifikacija.');
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      const msg = error.response?.data?.message || 'Kreiranje placanja nije uspelo.';
-      toast.error(msg);
-      reset();
-    } finally {
-      setIsSubmitting(false);
-    }
+  const onSubmit = async () => {
+    // SAMO otvori OTP modal. Pare NE idu nigde dok se ne unese kod.
+    console.log('[PAYMENT] onSubmit called - opening OTP modal ONLY, no payment sent');
+    setShowVerification(true);
   };
 
   const selectedFrom = watch('fromAccountNumber');
@@ -334,20 +311,41 @@ export default function NewPaymentPage() {
       </Card>
 
       <VerificationModal
-        transactionId={pendingTransactionId}
         isOpen={showVerification}
         onClose={() => setShowVerification(false)}
-        onSuccess={async () => {
-          setShowVerification(false);
-          const toAcc = watch('toAccountNumber');
-          const recipName = watch('recipientName') || 'Novi primalac';
-          if (toAcc && !recipients.some(r => r.accountNumber === toAcc)) {
-            try {
-              await paymentRecipientService.create({ name: recipName, accountNumber: toAcc });
-              toast.success('Primalac sacuvan u sablone.');
-            } catch { /* ignore */ }
+        onVerified={async (otpCode: string) => {
+          // OTP je verifikovan - sad kreiraj placanje sa kodom
+          try {
+            const formData = getValues();
+            await transactionService.createPayment({
+              fromAccountNumber: formData.fromAccountNumber,
+              toAccountNumber: formData.toAccountNumber,
+              amount: formData.amount,
+              recipientName: formData.recipientName,
+              paymentCode: formData.paymentCode,
+              paymentPurpose: formData.paymentPurpose,
+              model: formData.model || undefined,
+              callNumber: formData.callNumber || undefined,
+              referenceNumber: formData.referenceNumber || undefined,
+            }, otpCode);
+
+            toast.success('Placanje je uspesno izvrseno.');
+            setShowVerification(false);
+
+            // Sacuvaj primaoca
+            const toAcc = formData.toAccountNumber;
+            const recipName = formData.recipientName || 'Novi primalac';
+            if (toAcc && !recipients.some(r => r.accountNumber === toAcc)) {
+              try {
+                await paymentRecipientService.create({ name: recipName, accountNumber: toAcc });
+                toast.success('Primalac sacuvan u sablone.');
+              } catch { /* ignore */ }
+            }
+            navigate('/payments/history');
+          } catch (err: unknown) {
+            const error = err as { response?: { data?: { message?: string } } };
+            toast.error(error.response?.data?.message || 'Kreiranje placanja nije uspelo.');
           }
-          navigate('/payments/history');
         }}
       />
     </div>

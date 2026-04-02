@@ -234,10 +234,12 @@ export interface Installment {
   id: number;
   loanNumber: string;
   amount: number;
-  interestAmount: number;        // Iznos kamatne stope
+  principalAmount?: number;
+  interestAmount?: number;
+  interestRate?: number;
   currency: Currency;
-  expectedDueDate: string;       // Ocekivani datum dospeca
-  actualDueDate?: string;        // Pravi datum dospeca
+  expectedDueDate: string;
+  actualDueDate?: string;
   paid: boolean;
 }
 

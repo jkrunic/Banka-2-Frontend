@@ -9,11 +9,26 @@ import type {
 } from '../types/celina2';
 import type { PaginatedResponse } from '../types';
 
+function mapTransferResponse(data: Record<string, unknown>): Transfer {
+  return {
+    id: data.id as number,
+    fromAccountNumber: data.fromAccountNumber as string,
+    toAccountNumber: data.toAccountNumber as string,
+    amount: data.amount as number,
+    fromCurrency: data.fromCurrency as Transfer['fromCurrency'],
+    toCurrency: data.toCurrency as Transfer['toCurrency'],
+    exchangeRate: (data.exchangeRate as number) ?? undefined,
+    convertedAmount: (data.toAmount as number) ?? (data.convertedAmount as number) ?? undefined,
+    commission: (data.commission as number) ?? undefined,
+    status: data.status as Transfer['status'],
+    createdAt: data.createdAt as string,
+  };
+}
+
 export const transactionService = {
   // --- Placanja ---
 
-  createPayment: async (data: NewPaymentRequest): Promise<Transaction> => {
-    // Mapiranje FE polja -> BE polja
+  createPayment: async (data: NewPaymentRequest, otpCode?: string): Promise<Transaction> => {
     const payload = {
       fromAccount: data.fromAccountNumber,
       toAccount: data.toAccountNumber,
@@ -24,6 +39,7 @@ export const transactionService = {
       recipientName: data.recipientName,
       model: data.model,
       callNumber: data.callNumber,
+      otpCode: otpCode || '',
     };
     const response = await api.post<Transaction>('/payments', payload);
     return response.data;
@@ -31,6 +47,11 @@ export const transactionService = {
 
   requestOtp: async (): Promise<{ sent: boolean; message: string }> => {
     const response = await api.post<{ sent: boolean; message: string }>('/payments/request-otp');
+    return response.data;
+  },
+
+  requestOtpViaEmail: async (): Promise<{ sent: boolean; message: string }> => {
+    const response = await api.post<{ sent: boolean; message: string }>('/payments/request-otp-email');
     return response.data;
   },
 
@@ -61,14 +82,14 @@ export const transactionService = {
 
   // --- Prenosi ---
 
-  createTransfer: async (data: TransferRequest): Promise<Transfer> => {
-    const response = await api.post<Transfer>('/transfers/internal', data);
-    return response.data;
+  createTransfer: async (data: TransferRequest, otpCode?: string): Promise<Transfer> => {
+    const response = await api.post('/transfers/internal', { ...data, otpCode: otpCode || '' });
+    return mapTransferResponse(response.data);
   },
 
-  createFxTransfer: async (data: TransferRequest): Promise<Transfer> => {
-    const response = await api.post<Transfer>('/transfers/fx', data);
-    return response.data;
+  createFxTransfer: async (data: TransferRequest, otpCode?: string): Promise<Transfer> => {
+    const response = await api.post('/transfers/fx', { ...data, otpCode: otpCode || '' });
+    return mapTransferResponse(response.data);
   },
 
   getTransfers: async (filters?: { accountNumber?: string; dateFrom?: string; dateTo?: string }): Promise<Transfer[]> => {
@@ -76,7 +97,15 @@ export const transactionService = {
     if (filters?.accountNumber) params.append('accountNumber', filters.accountNumber);
     if (filters?.dateFrom) params.append('fromDate', filters.dateFrom);
     if (filters?.dateTo) params.append('toDate', filters.dateTo);
-    const response = await api.get<Transfer[]>('/transfers', { params });
+    const response = await api.get('/transfers', { params });
+    const data = Array.isArray(response.data) ? response.data : [];
+    return data.map(mapTransferResponse);
+  },
+
+  getPaymentReceipt: async (paymentId: number): Promise<Blob> => {
+    const response = await api.get(`/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
+    });
     return response.data;
   },
 };

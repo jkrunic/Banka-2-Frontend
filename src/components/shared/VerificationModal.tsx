@@ -10,39 +10,40 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface VerificationModalProps {
-  transactionId: number | null;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onVerified: (otpCode: string) => Promise<void>;
 }
 
-export default function VerificationModal({
-  transactionId,
-  isOpen,
-  onClose,
-  onSuccess,
-}: VerificationModalProps) {
+/**
+ * OTP Verification Modal
+ *
+ * Flow:
+ * 1. Modal opens -> request OTP (code appears on mobile app)
+ * 2. User enters 6-digit code
+ * 3. User clicks "Potvrdi" -> calls onVerified(code) which is an async function
+ * 4. Parent component (NewPaymentPage) sends POST /payments with the code
+ * 5. If backend rejects -> error shown in modal, user can retry
+ * 6. If backend accepts -> parent navigates away, modal closes
+ * 7. "Otkaži" -> closes modal, NOTHING happens with money
+ */
+export default function VerificationModal({ isOpen, onClose, onVerified }: VerificationModalProps) {
   const [secondsLeft, setSecondsLeft] = useState(300);
   const [attemptsLeft, setAttemptsLeft] = useState(3);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
   const [otpSent, setOtpSent] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<VerificationFormData>({
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<VerificationFormData>({
     resolver: zodResolver(verificationSchema),
     defaultValues: { code: '' },
   });
 
+  // Request OTP when modal opens
   const sendOtp = useCallback(async () => {
     try {
       await transactionService.requestOtp();
       setOtpSent(true);
-      toast.info('Verifikacioni kod je poslat na vaš email.');
     } catch {
       toast.error('Greška pri slanju verifikacionog koda.');
     }
@@ -50,72 +51,59 @@ export default function VerificationModal({
 
   useEffect(() => {
     if (!isOpen) return;
-
     setSecondsLeft(300);
     setAttemptsLeft(3);
     setServerError('');
     setOtpSent(false);
     reset({ code: '' });
-
     sendOtp();
-  }, [isOpen, transactionId, reset, sendOtp]);
+  }, [isOpen, reset, sendOtp]);
 
+  // Countdown timer
   useEffect(() => {
     if (!isOpen || secondsLeft <= 0) return;
-
-    const intervalId = window.setInterval(() => {
-      setSecondsLeft((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
+    const id = window.setInterval(() => setSecondsLeft(p => Math.max(0, p - 1)), 1000);
+    return () => window.clearInterval(id);
   }, [isOpen, secondsLeft]);
 
   const formattedTime = useMemo(() => {
-    const min = Math.floor(secondsLeft / 60)
-      .toString()
-      .padStart(2, '0');
-    const sec = (secondsLeft % 60).toString().padStart(2, '0');
-    return `${min}:${sec}`;
+    const m = Math.floor(secondsLeft / 60).toString().padStart(2, '0');
+    const s = (secondsLeft % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   }, [secondsLeft]);
 
-  const closeWithReset = () => {
-    setServerError('');
-    reset({ code: '' });
-    onClose();
-  };
-
+  // Submit: pass code to parent, parent does the actual payment
   const onSubmit = async (data: VerificationFormData) => {
-    if (!transactionId) return;
     if (secondsLeft === 0) {
-      setServerError('Kod je istekao. Pokrenite verifikaciju ponovo.');
+      setServerError('Kod je istekao. Zatražite novi.');
+      return;
+    }
+    if (attemptsLeft <= 0) {
+      setServerError('Nema preostalih pokušaja.');
       return;
     }
 
     setIsSubmitting(true);
     setServerError('');
-    try {
-      const result = await transactionService.verifyPayment({
-        transactionId,
-        code: data.code,
-      });
 
-      if (result.verified) {
-        toast.success('Transakcija je uspešno verifikovana.');
-        reset({ code: '' });
-        onSuccess();
-        onClose();
-      } else if (result.blocked) {
-        toast.error('Maksimalan broj pokušaja je dostignut. Transakcija je otkazana.');
-        closeWithReset();
-      } else {
-        setServerError(result.message || 'Kod nije validan. Pokušajte ponovo.');
-        setAttemptsLeft((prev) => Math.max(0, prev - 1));
-      }
+    try {
+      // This calls NewPaymentPage's handler which does POST /payments with the OTP code
+      // If backend rejects the code, it will throw an error
+      await onVerified(data.code);
+      // If we get here, payment succeeded - parent will navigate away
     } catch (err: unknown) {
-      const error = err as { message?: string; response?: { data?: { message?: string } } };
-      const msg = error.response?.data?.message || error.message || 'Kod nije validan. Pokušajte ponovo.';
+      // Payment failed (wrong OTP, insufficient funds, etc)
+      const error = err as { response?: { data?: { message?: string } } };
+      const msg = error.response?.data?.message || 'Verifikacija nije uspela. Pokušajte ponovo.';
       setServerError(msg);
-      setAttemptsLeft((prev) => Math.max(0, prev - 1));
+      setAttemptsLeft(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          toast.error('Maksimalan broj pokušaja. Transakcija otkazana.');
+          setTimeout(() => onClose(), 1500);
+        }
+        return next;
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +118,7 @@ export default function VerificationModal({
     await sendOtp();
   };
 
-  if (!isOpen || !transactionId) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -138,7 +126,7 @@ export default function VerificationModal({
         <h2 className="text-xl font-bold mb-1">Verifikacija transakcije</h2>
         <p className="text-sm text-muted-foreground mb-4">
           {otpSent
-            ? 'Verifikacioni kod je poslat na vaš email. Unesite ga ispod.'
+            ? 'Otvorite mobilnu aplikaciju za verifikacioni kod.'
             : 'Slanje verifikacionog koda...'}
         </p>
 
@@ -157,35 +145,37 @@ export default function VerificationModal({
               inputMode="numeric"
               placeholder="Unesite 6-cifreni kod"
               className={errors.code ? 'border-destructive text-center' : 'text-center'}
+              autoFocus
             />
             {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
           </div>
 
           <div className="rounded-md border p-3 text-sm space-y-1">
-            <p>
-              Kod važi još: <span className="font-semibold">{formattedTime}</span>
-            </p>
-            <p>
-              Preostalo pokušaja: <span className="font-semibold">{attemptsLeft}</span>
-            </p>
+            <p>Kod važi još: <span className="font-semibold">{formattedTime}</span></p>
+            <p>Preostalo pokušaja: <span className="font-semibold">{attemptsLeft}</span></p>
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={secondsLeft > 0}
-              className="text-primary disabled:text-muted-foreground"
-            >
+            <button type="button" onClick={handleResend} disabled={secondsLeft > 0}
+              className="text-primary disabled:text-muted-foreground">
               {secondsLeft > 0 ? `Pošalji ponovo za ${secondsLeft}s` : 'Pošalji ponovo'}
+            </button>
+            <button type="button" className="text-muted-foreground hover:text-primary transition-colors"
+              onClick={async () => {
+                try {
+                  await transactionService.requestOtpViaEmail();
+                  toast.info('Kod poslat na email.');
+                } catch { toast.error('Greška.'); }
+              }}>
+              Pošaljite na email
             </button>
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button type="button" variant="outline" onClick={closeWithReset}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Otkaži
             </Button>
-            <Button type="submit" disabled={isSubmitting || attemptsLeft === 0 || secondsLeft === 0}>
+            <Button type="submit" disabled={isSubmitting || attemptsLeft <= 0 || secondsLeft === 0}>
               {isSubmitting ? 'Provera...' : 'Potvrdi'}
             </Button>
           </div>
@@ -194,5 +184,3 @@ export default function VerificationModal({
     </div>
   );
 }
-
-

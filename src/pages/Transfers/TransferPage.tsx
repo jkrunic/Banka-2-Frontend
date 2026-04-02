@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeftRight, Wallet } from 'lucide-react';
+import { ArrowLeftRight, Wallet, ArrowRight } from 'lucide-react';
 import VerificationModal from '@/components/shared/VerificationModal';
 
 function asArray<T>(value: unknown): T[] {
@@ -271,7 +271,7 @@ export default function TransferPage() {
 
 
   return (
-    <div className="container mx-auto max-w-2xl py-6">
+    <div className="container mx-auto max-w-6xl py-6">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
           <ArrowLeftRight className="h-5 w-5" />
@@ -282,7 +282,9 @@ export default function TransferPage() {
         </div>
       </div>
 
-      <Card className="mt-6 rounded-2xl shadow-sm">
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="lg:col-span-2">
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
             <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
@@ -530,6 +532,115 @@ export default function TransferPage() {
           )}
         </CardContent>
       </Card>
+
+      </div>{/* end left column */}
+
+      {/* Right column: Sticky preview */}
+      {!isLoading && safeAccounts.length > 0 && (
+      <div className="hidden lg:block">
+        <div className="sticky top-8 space-y-4">
+          <Card className="rounded-2xl border shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-600" />
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+                <CardTitle className="text-base">Pregled prenosa</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* From */}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sa racuna</p>
+                {fromAccountData ? (
+                  <div className="rounded-lg border bg-muted/30 p-2.5">
+                    <p className="text-sm font-medium">{fromAccountData.name || fromAccountData.accountType}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{fromAccountData.accountNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Raspolozivo: <span className="font-mono font-semibold text-foreground">{formatAmount(fromAccountData.availableBalance)} {fromAccountData.currency}</span></p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Nije izabran</p>
+                )}
+              </div>
+
+              {/* Arrow */}
+              {toAccountData && (
+                <div className="flex justify-center">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/40">
+                    <ArrowRight className="h-4 w-4 text-indigo-600 dark:text-indigo-400 rotate-90" />
+                  </div>
+                </div>
+              )}
+
+              {/* To */}
+              {toAccountData && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Na racun</p>
+                  <div className="rounded-lg border bg-muted/30 p-2.5">
+                    <p className="text-sm font-medium">{toAccountData.name || toAccountData.accountType}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{toAccountData.accountNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Valuta: <span className="font-semibold text-foreground">{toAccountData.currency}</span></p>
+                  </div>
+                </div>
+              )}
+
+              {/* Amount */}
+              {amount > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Iznos</p>
+                  <div className="rounded-lg border border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold font-mono tabular-nums text-indigo-600 dark:text-indigo-400">
+                      {formatAmount(amount)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{fromAccountData?.currency || 'RSD'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Exchange info */}
+              {exchangePreview && fromAccountData && toAccountData && amount > 0 && (
+                <div className="space-y-2 pt-1 border-t">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Kurs</span>
+                    <span className="font-mono text-xs">{formatAmount(exchangePreview.rate, 4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Dobija</span>
+                    <span className="font-mono font-medium">{formatAmount(exchangePreview.convertedAmount)} {toAccountData.currency}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Provizija</span>
+                    <span className="font-mono">{formatAmount(commission)} {fromAccountData.currency}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm border-t pt-2">
+                    <span className="font-semibold">Ukupno</span>
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatAmount(totalDebit)} {fromAccountData.currency}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Same currency */}
+              {fromAccountData && toAccountData && fromAccountData.currency === toAccountData.currency && amount > 0 && (
+                <div className="pt-1 border-t">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Bez konverzije</span>
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatAmount(amount)} {fromAccountData.currency}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Empty */}
+              {!fromAccountData && !toAccountData && !amount && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">Popunite formu da vidite pregled.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      )}
+
+      </div>{/* end grid */}
 
       <VerificationModal
         isOpen={showVerification}

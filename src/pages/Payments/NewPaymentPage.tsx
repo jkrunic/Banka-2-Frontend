@@ -376,7 +376,7 @@ export default function NewPaymentPage() {
       {/* Right column: Sticky preview (1/3 width) */}
       {!isLoading && (
       <div className="hidden lg:block">
-        <div className="sticky top-6 space-y-4">
+        <div className="sticky top-8 space-y-4">
           {/* Live preview card */}
           <Card className="rounded-2xl border shadow-sm overflow-hidden">
             <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-600" />

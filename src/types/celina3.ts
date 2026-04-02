@@ -111,6 +111,7 @@ export interface Order {
   accountId?: number;
   createdAt: string;
   lastModification: string;
+  listingSettlementDate?: string;
 }
 
 export interface CreateOrderRequest {

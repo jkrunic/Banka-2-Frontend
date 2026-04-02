@@ -46,9 +46,13 @@ function formatDateTime(value: string | null | undefined): string {
   return `${date.toLocaleDateString('sr-RS')} ${date.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-// TODO: Implementirati kada backend doda settlementDate na Order entitet
-function isSettlementDatePassed(_order: Order): boolean {
-  return false;
+function isSettlementDatePassed(order: Order): boolean {
+  if (!order.listingSettlementDate) return false;
+  const settlement = new Date(order.listingSettlementDate);
+  if (Number.isNaN(settlement.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return settlement.getTime() < today.getTime();
 }
 
 export default function OrdersListPage() {

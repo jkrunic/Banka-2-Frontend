@@ -1,9 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList,
   Inbox,
   Loader2,
+  Plus,
   RefreshCw,
   ShieldCheck,
   TrendingDown,
@@ -140,11 +142,12 @@ function getOrderExecution(order: Order) {
 }
 
 function shouldShowExecutionProgress(order: Order): boolean {
-  if (order.status !== OrderStatus.APPROVED && order.status !== OrderStatus.DONE) {
-    return false;
-  }
+  // Always show progress for APPROVED (executing) orders, even at 0%
+  if (order.status === OrderStatus.APPROVED) return true;
+  // For DONE orders, show only if there was partial execution tracked
+  if (order.status === OrderStatus.DONE) return true;
 
-  return getOrderExecution(order).executed > 0;
+  return false;
 }
 
 function canCancelOrder(order: Order): boolean {
@@ -176,7 +179,18 @@ function InfoRow({
   );
 }
 
+type StatusFilter = 'ALL' | OrderStatus;
+
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Svi' },
+  { value: OrderStatus.PENDING, label: 'Na cekanju' },
+  { value: OrderStatus.APPROVED, label: 'Odobreni' },
+  { value: OrderStatus.DONE, label: 'Zavrseni' },
+  { value: OrderStatus.DECLINED, label: 'Odbijeni' },
+];
+
 export default function MyOrdersPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -184,6 +198,7 @@ export default function MyOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [cancelingOrderId, setCancelingOrderId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
@@ -327,6 +342,11 @@ export default function MyOrdersPage() {
     );
   }, [sortedOrders]);
 
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === 'ALL') return sortedOrders;
+    return sortedOrders.filter((order) => order.status === statusFilter);
+  }, [sortedOrders, statusFilter]);
+
   const selectedOrderCommission = selectedOrder
     ? getCommission(selectedOrder.orderType, Number(selectedOrder.approximatePrice ?? 0))
     : 0;
@@ -353,9 +373,13 @@ export default function MyOrdersPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-              Sortiranje: datum opadajuce
-            </div>
+            <Button
+              onClick={() => navigate('/securities')}
+              className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nova kupovina
+            </Button>
             <Button
               variant="outline"
               onClick={() => void loadOrders(false)}
@@ -376,35 +400,37 @@ export default function MyOrdersPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Ukupno na strani</CardDescription>
-              <CardTitle className="text-2xl">{statusCounts.total}</CardTitle>
-            </CardHeader>
-          </Card>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+              <CardTitle>Filter po statusu</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {STATUS_FILTER_OPTIONS.map((option) => {
+              const count =
+                option.value === 'ALL'
+                  ? statusCounts.total
+                  : statusCounts[option.value] ?? 0;
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Na cekanju</CardDescription>
-              <CardTitle className="text-2xl">{statusCounts.PENDING}</CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Odobreni</CardDescription>
-              <CardTitle className="text-2xl">{statusCounts.APPROVED}</CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Zavrseni</CardDescription>
-              <CardTitle className="text-2xl">{statusCounts.DONE}</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
+              return (
+                <Button
+                  key={option.value}
+                  variant={statusFilter === option.value ? 'default' : 'outline'}
+                  onClick={() => setStatusFilter(option.value)}
+                  className={
+                    statusFilter === option.value
+                      ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20'
+                      : ''
+                  }
+                >
+                  {option.label} ({count})
+                </Button>
+              );
+            })}
+          </CardContent>
+        </Card>
 
         {loadError && (
           <Alert variant="destructive">
@@ -460,14 +486,20 @@ export default function MyOrdersPage() {
                   </div>
                 ))}
               </div>
-            ) : sortedOrders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                   <Inbox className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h2 className="text-lg font-semibold">Nema kreiranih naloga</h2>
+                <h2 className="text-lg font-semibold">
+                  {statusFilter === 'ALL'
+                    ? 'Nema kreiranih naloga'
+                    : 'Nema naloga za izabrani filter'}
+                </h2>
                 <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                  Kada posaljete prvi nalog, ovde cete videti istoriju i status izvrsenja.
+                  {statusFilter === 'ALL'
+                    ? 'Kada posaljete prvi nalog, ovde cete videti istoriju i status izvrsenja.'
+                    : 'Pokusajte sa drugim statusom filtera.'}
                 </p>
               </div>
             ) : (
@@ -486,7 +518,7 @@ export default function MyOrdersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedOrders.map((order) => {
+                    {filteredOrders.map((order) => {
                       const DirectionIcon = getDirectionIcon(order.direction);
                       const execution = getOrderExecution(order);
                       const showExecutionProgress = shouldShowExecutionProgress(order);
@@ -529,8 +561,12 @@ export default function MyOrdersPage() {
                                 <div className="max-w-52 space-y-1.5">
                                   <Progress
                                     value={execution.progress}
-                                    className="h-2 bg-muted"
-                                    indicatorClassName="bg-emerald-500"
+                                    className="h-2.5 bg-muted"
+                                    indicatorClassName={
+                                      execution.progress === 100
+                                        ? 'bg-emerald-500'
+                                        : 'bg-gradient-to-r from-indigo-500 to-violet-500'
+                                    }
                                     aria-label={`Izvrsenje ordera ${execution.progress}%`}
                                   />
                                   <p className="font-mono text-xs text-muted-foreground">

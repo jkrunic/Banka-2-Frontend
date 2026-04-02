@@ -2,7 +2,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarClock,
-  Clock3,
   FilePlus2,
   Loader2,
   ShieldCheck,
@@ -115,12 +114,6 @@ const createOrderSchema = z
 type CreateOrderFormInput = z.input<typeof createOrderSchema>;
 type CreateOrderFormValues = z.output<typeof createOrderSchema>;
 
-type ExchangeSchedule = {
-  openTime: string;
-  closeTime: string;
-  timeZone: string;
-  isTwentyFourHours?: boolean;
-};
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -165,119 +158,6 @@ function getListingLabel(listing: Listing) {
   return `${listing.ticker} · ${listing.name}`;
 }
 
-function parseTimeToMinutes(value: string): number {
-  const [hours, minutes] = value.split(':').map(Number);
-  return hours * 60 + minutes;
-}
-
-function getExchangeSchedule(listing: Listing): ExchangeSchedule {
-  const acronym = listing.exchangeAcronym.toUpperCase();
-
-  if (
-    listing.listingType === ListingType.FOREX ||
-    acronym.includes('FOREX') ||
-    acronym.includes('FX')
-  ) {
-    return {
-      openTime: '00:00',
-      closeTime: '23:59',
-      timeZone: 'Europe/London',
-      isTwentyFourHours: true,
-    };
-  }
-
-  if (
-    acronym.includes('NASDAQ') ||
-    acronym.includes('NYSE') ||
-    acronym.includes('AMEX') ||
-    acronym.includes('ARCA')
-  ) {
-    return {
-      openTime: '09:30',
-      closeTime: '16:00',
-      timeZone: 'America/New_York',
-    };
-  }
-
-  if (acronym.includes('CME')) {
-    return {
-      openTime: '08:30',
-      closeTime: '15:00',
-      timeZone: 'America/Chicago',
-    };
-  }
-
-  if (acronym.includes('LSE')) {
-    return {
-      openTime: '08:00',
-      closeTime: '16:30',
-      timeZone: 'Europe/London',
-    };
-  }
-
-  if (acronym.includes('XETRA') || acronym.includes('EUREX')) {
-    return {
-      openTime: '09:00',
-      closeTime: '17:30',
-      timeZone: 'Europe/Berlin',
-    };
-  }
-
-  return {
-    openTime: '09:00',
-    closeTime: '16:00',
-    timeZone: 'Europe/Belgrade',
-  };
-}
-
-function getExchangeStatus(listing: Listing | null) {
-  if (!listing) {
-    return {
-      isClosed: false,
-      isAfterHours: false,
-      schedule: null as ExchangeSchedule | null,
-    };
-  }
-
-  const schedule = getExchangeSchedule(listing);
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: schedule.timeZone,
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date());
-
-  const weekday = parts.find((part) => part.type === 'weekday')?.value ?? 'Mon';
-  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
-  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
-  const currentMinutes = hour * 60 + minute;
-
-  if (weekday === 'Sat' || weekday === 'Sun') {
-    return {
-      isClosed: true,
-      isAfterHours: false,
-      schedule,
-    };
-  }
-
-  if (schedule.isTwentyFourHours) {
-    return {
-      isClosed: false,
-      isAfterHours: false,
-      schedule,
-    };
-  }
-
-  const openMinutes = parseTimeToMinutes(schedule.openTime);
-  const closeMinutes = parseTimeToMinutes(schedule.closeTime);
-
-  return {
-    isClosed: currentMinutes < openMinutes || currentMinutes >= closeMinutes,
-    isAfterHours: currentMinutes >= closeMinutes - 60 && currentMinutes < closeMinutes,
-    schedule,
-  };
-}
 
 function getPricePerUnit(
   listing: Listing | null,
@@ -642,7 +522,6 @@ export default function CreateOrderPage() {
   const commission = getCommission(orderType, approximatePrice);
   const totalAmount = approximatePrice + commission;
   const pricingCurrency = getPricingCurrency(selectedListing);
-  const marketStatus = getExchangeStatus(selectedListing);
 
   // Settlement date warnings for FUTURES
   const settlementInfo = useMemo(() => {
@@ -1140,23 +1019,13 @@ export default function CreateOrderPage() {
             </Card>
 
             <div className="space-y-6">
-              {marketStatus.isClosed && (
+              {!exchangeApiLoading && exchangeApiOpen && !exchangeApiOpen.isOpen && (
                 <Alert variant="warning">
                   <TriangleAlert className="h-4 w-4" />
                   <AlertTitle>Berza je trenutno zatvorena</AlertTitle>
                   <AlertDescription>
                     Izvršenje naloga će čekati sledeći trgovinski prozor za{' '}
-                    {selectedListing?.exchangeAcronym || 'izabranu berzu'}.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {!marketStatus.isClosed && marketStatus.isAfterHours && (
-                <Alert variant="info">
-                  <Clock3 className="h-4 w-4" />
-                  <AlertTitle>Berza se zatvara uskoro</AlertTitle>
-                  <AlertDescription>
-                    Trgovanje je pri kraju sesije i izvršenje može kasniti.
+                    {exchangeApiOpen.name || selectedListing?.exchangeAcronym || 'izabranu berzu'}.
                   </AlertDescription>
                 </Alert>
               )}

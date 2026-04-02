@@ -140,6 +140,7 @@ export default function SecuritiesListPage() {
       const result = await listingService.getAll(activeTab, debouncedSearch, page, PAGE_SIZE);
       setData(result);
     } catch {
+      toast.error('Greska pri ucitavanju hartija od vrednosti');
       setData({ content: [], totalPages: 0, totalElements: 0, number: 0, size: PAGE_SIZE } as PaginatedResponse<Listing>);
     } finally {
       setLoading(false);

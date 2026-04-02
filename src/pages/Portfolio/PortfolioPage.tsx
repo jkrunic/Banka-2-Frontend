@@ -7,12 +7,16 @@ import {
   Receipt,
   Wallet,
   ArrowRightLeft,
-  LineChart,
+  Zap,
 } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
 import type { PieLabelRenderProps } from 'recharts';
 
 import portfolioService from '@/services/portfolioService';
+import listingService from '@/services/listingService';
 import { toast } from '@/lib/notify';
 import type { PortfolioItem, PortfolioSummary } from '@/types/celina3';
 
@@ -86,6 +90,78 @@ function getListingTypeBadgeVariant(
     default:
       return 'outline';
   }
+}
+
+function isOptionType(type: string): boolean {
+  return !['STOCK', 'FUTURES', 'FOREX'].includes(type);
+}
+
+function PortfolioProfitChart({ items }: { items: PortfolioItem[] }) {
+  const data = useMemo(() => {
+    return items.map((item) => ({
+      name: item.listingTicker,
+      profit: item.profit,
+      value: item.quantity * item.currentPrice,
+    }));
+  }, [items]);
+
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+          Profit po hartijama
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.4 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.4 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v: number) => formatAmount(v, 0)}
+              width={70}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}
+              formatter={(value: unknown) => [formatAmount(Number(value)), 'Profit']}
+              cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
+            />
+            <Bar
+              dataKey="profit"
+              radius={[4, 4, 0, 0]}
+              animationDuration={800}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              shape={(props: any) => {
+                const { x, y, width, height, payload } = props;
+                const fill = payload.profit >= 0 ? '#10b981' : '#ef4444';
+                return (
+                  <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />
+                );
+              }}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
 }
 
 const PIE_COLORS: Record<string, string> = {
@@ -210,50 +286,51 @@ export default function PortfolioPage() {
 
   const [publicQuantities, setPublicQuantities] = useState<Record<number, string>>({});
   const [savingPublicId, setSavingPublicId] = useState<number | null>(null);
+  const [exercisingId, setExercisingId] = useState<number | null>(null);
+
+  const loadPortfolio = async (showLoadingState = true) => {
+    if (showLoadingState) setLoading(true);
+    setError('');
+
+    try {
+      const [summaryResponse, portfolioResponse] = await Promise.all([
+        portfolioService.getSummary(),
+        portfolioService.getMyPortfolio(),
+      ]);
+
+      const safeSummary = summaryResponse ?? {
+        totalValue: 0,
+        totalProfit: 0,
+        paidTaxThisYear: 0,
+        unpaidTaxThisMonth: 0,
+      };
+
+      const safeItems = Array.isArray(portfolioResponse) ? portfolioResponse : [];
+
+      setSummary(safeSummary);
+      setItems(safeItems);
+
+      const initialPublicValues: Record<number, string> = {};
+      safeItems.forEach((item) => {
+        initialPublicValues[item.id] = String(item.publicQuantity ?? 0);
+      });
+      setPublicQuantities(initialPublicValues);
+    } catch {
+      setError('Greška pri učitavanju portfolija. Pokušajte ponovo.');
+      setSummary({
+        totalValue: 0,
+        totalProfit: 0,
+        paidTaxThisYear: 0,
+        unpaidTaxThisMonth: 0,
+      });
+      setItems([]);
+      setPublicQuantities({});
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadPortfolio = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [summaryResponse, portfolioResponse] = await Promise.all([
-          portfolioService.getSummary(),
-          portfolioService.getMyPortfolio(),
-        ]);
-
-        const safeSummary = summaryResponse ?? {
-          totalValue: 0,
-          totalProfit: 0,
-          paidTaxThisYear: 0,
-          unpaidTaxThisMonth: 0,
-        };
-
-        const safeItems = Array.isArray(portfolioResponse) ? portfolioResponse : [];
-
-        setSummary(safeSummary);
-        setItems(safeItems);
-
-        const initialPublicValues: Record<number, string> = {};
-        safeItems.forEach((item) => {
-          initialPublicValues[item.id] = String(item.publicQuantity ?? 0);
-        });
-        setPublicQuantities(initialPublicValues);
-      } catch {
-        setError('Greška pri učitavanju portfolija. Pokušajte ponovo.');
-        setSummary({
-          totalValue: 0,
-          totalProfit: 0,
-          paidTaxThisYear: 0,
-          unpaidTaxThisMonth: 0,
-        });
-        setItems([]);
-        setPublicQuantities({});
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadPortfolio();
   }, []);
 
@@ -298,6 +375,19 @@ export default function PortfolioPage() {
       toast.error('Čuvanje javne količine nije uspelo.');
     } finally {
       setSavingPublicId(null);
+    }
+  };
+
+  const handleExerciseOption = async (item: PortfolioItem) => {
+    setExercisingId(item.id);
+    try {
+      await listingService.exerciseOption(item.id);
+      toast.success(`Opcija "${item.listingTicker}" je uspešno iskorišćena.`);
+      await loadPortfolio(false);
+    } catch {
+      toast.error('Iskorišćavanje opcije nije uspelo. Pokušajte ponovo.');
+    } finally {
+      setExercisingId(null);
     }
   };
 
@@ -418,18 +508,8 @@ export default function PortfolioPage() {
           {/* Portfolio Distribution Pie Chart */}
           {items.length > 0 && <PortfolioDistributionChart items={items} />}
 
-          {/* Profit Placeholder */}
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <LineChart className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="font-medium">Profit grafikon dolazi uskoro</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Vizuelni prikaz profita po periodima bice dostupan u narednoj verziji.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Profit Bar Chart */}
+          {items.length > 0 && <PortfolioProfitChart items={items} />}
 
           <Card>
             <CardHeader>
@@ -542,14 +622,17 @@ export default function PortfolioPage() {
                                   </Button>
                                 </div>
                               )}
-
-                              {/*
-                                TODO-5:
-                                "Iskoristi opciju" dugme nije implementirano jer:
-                                - backend endpoint još ne postoji
-                                - PortfolioItem model nema podatke potrebne za proveru
-                                  in-the-money i settlementDate uslova
-                              */}
+                              {isOptionType(item.listingType) && (
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:from-indigo-600 hover:to-violet-700"
+                                  disabled={exercisingId === item.id}
+                                  onClick={() => handleExerciseOption(item)}
+                                >
+                                  <Zap className="mr-2 h-4 w-4" />
+                                  {exercisingId === item.id ? 'Iskorišćavanje...' : 'Iskoristi opciju'}
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

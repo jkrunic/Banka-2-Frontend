@@ -57,6 +57,14 @@ const listingService = {
     });
     return response.data;
   },
+
+  /**
+   * POST /options/{id}/exercise
+   * Iskoristava opciju iz portfolija.
+   */
+  exerciseOption: async (optionId: number): Promise<void> => {
+    await api.post(`/options/${optionId}/exercise`);
+  },
 };
 
 export default listingService;

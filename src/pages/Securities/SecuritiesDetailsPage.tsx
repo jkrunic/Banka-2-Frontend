@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -15,9 +15,11 @@ import {
   Shield,
   Clock,
   Link2,
+  RefreshCw,
 } from 'lucide-react';
 import type { Listing, ListingDailyPrice, OptionChain } from '@/types/celina3';
 import listingService from '@/services/listingService';
+import { toast } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -62,19 +64,36 @@ function formatVolume(vol: number | null | undefined): string {
 
 function generateFakeHistory(basePrice: number, days: number): ListingDailyPrice[] {
   const data: ListingDailyPrice[] = [];
-  let price = basePrice * 0.95;
+  // Start from an earlier price using mean-reverting random walk
+  const dailyVolatility = 0.015; // 1.5% daily volatility
+  const meanReversionStrength = 0.05;
+  let price = basePrice * (0.9 + Math.random() * 0.1); // Start 90-100% of current price
+  const avgVolume = Math.max(50000, Math.floor(basePrice * 500));
+
   for (let i = days; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const change = (Math.random() - 0.48) * basePrice * 0.03;
-    price = Math.max(price + change, basePrice * 0.7);
+
+    // Mean-reverting random walk: drift toward basePrice at the end
+    const drift = (basePrice - price) * meanReversionStrength / Math.max(days, 1);
+    const randomShock = (Math.random() - 0.5) * 2 * basePrice * dailyVolatility;
+    const change = drift + randomShock;
+    price = Math.max(price + change, basePrice * 0.5);
+
+    const dayRange = Math.abs(randomShock) + basePrice * 0.005;
+    const high = price + dayRange * (0.3 + Math.random() * 0.7);
+    const low = price - dayRange * (0.3 + Math.random() * 0.7);
+    // Volume varies with volatility - bigger moves = more volume
+    const volMultiplier = 0.5 + Math.abs(change / basePrice) * 20 + Math.random();
+    const volume = Math.floor(avgVolume * volMultiplier);
+
     data.push({
       date: date.toISOString().split('T')[0],
       price: Math.round(price * 100) / 100,
-      high: Math.round((price + Math.abs(change)) * 100) / 100,
-      low: Math.round((price - Math.abs(change) * 0.8) * 100) / 100,
+      high: Math.round(high * 100) / 100,
+      low: Math.round(Math.max(low, price * 0.95) * 100) / 100,
       change: Math.round(change * 100) / 100,
-      volume: Math.floor(Math.random() * 1000000) + 100000,
+      volume,
     });
   }
   return data;
@@ -115,6 +134,8 @@ export default function SecuritiesDetailsPage() {
   const [history, setHistory] = useState<ListingDailyPrice[]>([]);
   const [period, setPeriod] = useState('MONTH');
   const [loading, setLoading] = useState(true);
+  const [isSimulated, setIsSimulated] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [orderDirection, setOrderDirection] = useState<'BUY' | 'SELL'>('BUY');
   const [orderQuantity, setOrderQuantity] = useState('1');
   const [orderType, setOrderType] = useState('MARKET');
@@ -136,15 +157,36 @@ export default function SecuritiesDetailsPage() {
           listingService.getById(Number(id)),
           listingService.getHistory(Number(id), period),
         ]);
-        if (!cancelled) { setListing(l); setHistory(h); }
+        if (!cancelled) {
+          setListing(l);
+          setHistory(h);
+          setIsSimulated(!h || h.length === 0);
+        }
       } catch {
-        if (!cancelled) { setListing(null); setHistory([]); }
+        if (!cancelled) {
+          toast.error('Greska pri ucitavanju detalja hartije');
+          setListing(null); setHistory([]); setIsSimulated(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
+  }, [id, period]);
+
+  const refreshHistory = useCallback(async () => {
+    if (!id) return;
+    setRefreshing(true);
+    try {
+      const h = await listingService.getHistory(Number(id), period);
+      setHistory(h);
+      setIsSimulated(!h || h.length === 0);
+    } catch {
+      // Keep existing data on refresh failure
+    } finally {
+      setRefreshing(false);
+    }
   }, [id, period]);
 
   // Load options chain for stocks
@@ -304,26 +346,45 @@ export default function SecuritiesDetailsPage() {
           {/* Chart */}
           <Card className="border-border/50 shadow-sm overflow-hidden">
             <CardHeader className="pb-2 bg-muted/10 dark:bg-slate-900/30">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
-                  Kretanje cene
-                </CardTitle>
-                <div className="flex gap-0.5 bg-muted/50 dark:bg-slate-800/50 p-0.5 rounded-lg">
-                  {PERIODS.map((p) => (
-                    <button
-                      type="button"
-                      key={p.key}
-                      onClick={() => setPeriod(p.key)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
-                        period === p.key
-                          ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+                    Kretanje cene
+                  </CardTitle>
+                  {isSimulated && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 font-mono text-amber-600 dark:text-amber-400 border-amber-400/40 bg-amber-500/5">
+                      Simulirani podaci
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={refreshHistory}
+                    disabled={refreshing}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                    title="Osvezi podatke"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                    Osvezi
+                  </button>
+                  <div className="flex gap-0.5 bg-muted/50 dark:bg-slate-800/50 p-0.5 rounded-lg">
+                    {PERIODS.map((p) => (
+                      <button
+                        type="button"
+                        key={p.key}
+                        onClick={() => setPeriod(p.key)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
+                          period === p.key
+                            ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -387,9 +448,9 @@ export default function SecuritiesDetailsPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-              {history.length === 0 && (
-                <p className="text-[10px] text-muted-foreground/50 text-center mt-2 font-mono">
-                  * Simulirani podaci - cekanje na istorijske podatke sa servera
+              {isSimulated && (
+                <p className="text-[10px] text-amber-600/60 dark:text-amber-400/50 text-center mt-2 font-mono">
+                  * Prikazani su simulirani podaci jer istorijski podaci jos nisu dostupni sa servera
                 </p>
               )}
             </CardContent>

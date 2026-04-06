@@ -22,7 +22,8 @@ function injectSession(win: Window, role: string, email: string, firstName: stri
   const token = createFakeJwt(role, email);
   win.sessionStorage.setItem('accessToken', token);
   win.sessionStorage.setItem('refreshToken', 'fake-refresh-token');
-  win.sessionStorage.setItem('user', JSON.stringify({ id: 1, email, role, firstName, lastName }));
+  const permissions = (role === 'ADMIN' || role === 'EMPLOYEE') ? ['ADMIN'] : [];
+  win.sessionStorage.setItem('user', JSON.stringify({ id: 1, email, role, firstName, lastName, username: email.split('@')[0], permissions }));
 }
 
 Cypress.Commands.add('loginAsAdmin', () => {

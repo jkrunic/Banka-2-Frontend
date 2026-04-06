@@ -848,11 +848,11 @@ describe('Supervisor Dashboard Page', () => {
     setupDashboardIntercepts();
     cy.visit('/employee/dashboard', { onBeforeLoad: (win) => setupAdminSession(win) });
 
-    cy.contains('Brze akcije').should('be.visible');
-    cy.contains('Orderi').should('be.visible');
-    cy.contains('Aktuari').should('be.visible');
-    cy.contains('Porez').should('be.visible');
-    cy.contains('Berze').should('be.visible');
+    cy.get('main').contains('Brze akcije').should('be.visible');
+    cy.get('main').contains('Orderi').should('be.visible');
+    cy.get('main').contains('Aktuari').should('be.visible');
+    cy.get('main').contains('Porez').should('be.visible');
+    cy.get('main').contains('Berze').should('be.visible');
   });
 
   it('shows loading skeletons while data loads', () => {

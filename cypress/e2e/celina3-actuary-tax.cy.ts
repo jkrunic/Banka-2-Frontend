@@ -101,7 +101,7 @@ describe('Actuary Management - Agent List', () => {
   it('loads the actuary management page with header', () => {
     cy.visit('/employee/actuaries', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getAgents');
-    cy.contains('Aktuari').should('be.visible');
+    cy.get('main').contains('Aktuari').should('be.visible');
   });
 
   it('displays all agents in the table', () => {
@@ -484,7 +484,7 @@ describe('Exchange Management - List Exchanges', () => {
   it('loads the exchanges page with header', () => {
     cy.visit('/employee/exchanges', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getExchanges');
-    cy.contains('Berze').should('be.visible');
+    cy.get('main').contains('Berze').should('be.visible');
   });
 
   it('displays all exchanges in the table', () => {

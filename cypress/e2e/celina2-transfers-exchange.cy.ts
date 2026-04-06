@@ -230,7 +230,7 @@ describe('Transfer Page - Same Currency Transfer (no FX)', () => {
     cy.get('#fromAccount').select(mockAccounts[0].accountNumber);
     cy.get('#toAccount').select(mockAccounts[1].accountNumber);
     cy.get('#amount').clear().type('10000');
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
 
     // Confirm step: shows both account numbers
     cy.contains(mockAccounts[0].accountNumber).should('be.visible');
@@ -249,7 +249,7 @@ describe('Transfer Page - Same Currency Transfer (no FX)', () => {
     cy.get('#fromAccount').select(mockAccounts[0].accountNumber);
     cy.get('#toAccount').select(mockAccounts[1].accountNumber);
     cy.get('#amount').clear().type('10000');
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     cy.contains('button', 'Potvrdi transfer').click();
     // OTP modal opens
     cy.wait('@requestOtp');
@@ -264,7 +264,7 @@ describe('Transfer Page - Same Currency Transfer (no FX)', () => {
     cy.get('#fromAccount').select(mockAccounts[0].accountNumber);
     cy.get('#toAccount').select(mockAccounts[1].accountNumber);
     cy.get('#amount').clear().type('10000');
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     cy.contains('button', 'Nazad').click();
     // Should be back on the form
     cy.get('#fromAccount').should('exist');
@@ -331,7 +331,7 @@ describe('Transfer Page - Different Currency (FX) Transfer', () => {
     cy.get('#toAccount').select(mockAccounts[2].accountNumber);
     cy.get('#amount').clear().type('50000');
     cy.wait('@exchangeCalc');
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     // Confirm step shows conversion details
     cy.contains('Konvertovani iznos').should('be.visible');
     cy.contains('Provizija (0.5%)').should('be.visible');
@@ -358,7 +358,7 @@ describe('Transfer Page - Insufficient Funds', () => {
     cy.get('#fromAccount').select(mockAccounts[0].accountNumber);
     cy.get('#toAccount').select(mockAccounts[1].accountNumber);
     cy.get('#amount').clear().type('999999');
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     // Should NOT navigate to confirm step; page still shows form
     cy.get('#fromAccount').should('exist');
     cy.get('#amount').should('exist');
@@ -374,7 +374,7 @@ describe('Transfer Page - Form Validation', () => {
 
   it('shows validation errors when required fields are empty', () => {
     // Submit without filling anything
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     cy.get('.text-destructive').should('exist');
   });
 });

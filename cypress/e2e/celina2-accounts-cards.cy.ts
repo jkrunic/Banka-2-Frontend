@@ -319,7 +319,7 @@ describe('Accounts - Account List Page', () => {
     cy.get('button[title="Filteri"]').click();
 
     // Select CHECKING filter — click the SelectTrigger (combobox) button to open dropdown
-    cy.get('button[role="combobox"]').click();
+    cy.get('button[role="combobox"]').first().click();
     cy.get('[role="option"]').contains('Tekuci').click();
 
     // Wait for filter to apply

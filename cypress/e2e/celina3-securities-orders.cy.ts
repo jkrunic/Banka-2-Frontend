@@ -32,7 +32,15 @@ function loginAs(win: Window, role: 'ADMIN' | 'CLIENT') {
   win.sessionStorage.setItem('refreshToken', 'fake-refresh');
   win.sessionStorage.setItem(
     'user',
-    JSON.stringify({ id: 1, email, role })
+    JSON.stringify({
+      id: 1,
+      email,
+      role,
+      firstName: role === 'ADMIN' ? 'Admin' : 'Milica',
+      lastName: role === 'ADMIN' ? 'Admin' : 'Nikolic',
+      username: email.split('@')[0],
+      permissions: role === 'ADMIN' ? ['ADMIN'] : ['TRADE_STOCKS'],
+    })
   );
 }
 

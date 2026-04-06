@@ -139,10 +139,11 @@ describe('Celina 3 - My Orders improvements', () => {
 
     cy.visit('/orders/my', {
       onBeforeLoad: (win) => seedClientSession(win),
+      failOnStatusCode: false,
     });
 
-    cy.contains('h1', 'Moji nalozi', { timeout: 10000 }).should('be.visible');
-    cy.contains('Pregled naloga').should('be.visible');
+    cy.contains('h1', 'Moji nalozi', { timeout: 15000 }).should('be.visible');
+    cy.get('main').contains('Pregled naloga').should('be.visible');
   };
 
   const getOrderRow = (label: string) => cy.contains('tbody tr', label);

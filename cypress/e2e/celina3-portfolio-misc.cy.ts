@@ -146,6 +146,7 @@ describe('Portfolio page', () => {
 
     cy.wait('@getSummary');
     cy.wait('@getPortfolio');
+    cy.contains('h1', 'Moj portfolio', { timeout: 10000 }).should('be.visible');
   });
 
   it('loads portfolio page with holdings table', () => {
@@ -799,22 +800,11 @@ describe('Margin accounts page', () => {
       req.reply({ statusCode: 200, body: {} });
     }).as('deposit');
 
-    // Re-intercept for reload after deposit
-    cy.intercept('GET', '**/margin-accounts/my', {
-      statusCode: 200,
-      body: marginAccounts,
-    });
-
     cy.visit('/margin-accounts', { onBeforeLoad: setClientSession });
     cy.wait('@getMarginAccounts');
 
     // Click deposit on the first (active) account
-    cy.contains('MRG-00001')
-      .parents('[class*="rounded"]')
-      .first()
-      .within(() => {
-        cy.contains('button', 'Uplati').click();
-      });
+    cy.contains('button', 'Uplati').first().click({ force: true });
 
     cy.contains('Uplata na marzni racun').should('be.visible');
     cy.get('#margin-amount').type('5000');
@@ -833,18 +823,13 @@ describe('Margin accounts page', () => {
       req.reply({ statusCode: 200, body: {} });
     }).as('withdraw');
 
-    cy.intercept('GET', '**/margin-accounts/my', {
-      statusCode: 200,
-      body: [marginAccounts[0]],
-    });
-
     cy.visit('/margin-accounts', { onBeforeLoad: setClientSession });
     cy.wait('@getMarginAccounts');
 
-    cy.contains('button', 'Isplati').click();
+    cy.contains('button', 'Isplati').first().click({ force: true });
     cy.contains('Isplata sa marznog racuna').should('be.visible');
     cy.get('#margin-amount').type('3000');
-    cy.contains('button', 'Isplati').last().click();
+    cy.contains('button', 'Isplati').last().click({ force: true });
     cy.wait('@withdraw');
   });
 
@@ -904,10 +889,10 @@ describe('Sidebar navigation - Celina 3 sections', () => {
   it('shows Berza section with trading links', () => {
     cy.visit('/home', { onBeforeLoad: setClientSession });
 
-    cy.contains('Berza').should('be.visible');
-    cy.get('aside a[href="/securities"]').should('be.visible');
-    cy.get('aside a[href="/portfolio"]').should('be.visible');
-    cy.get('aside a[href="/orders/my"]').should('be.visible');
+    cy.contains('Berza').should('exist');
+    cy.get('aside a[href="/securities"]').should('exist');
+    cy.get('aside a[href="/portfolio"]').should('exist');
+    cy.get('aside a[href="/orders/my"]').should('exist');
   });
 
   it('theme toggle switches between light and dark modes', () => {

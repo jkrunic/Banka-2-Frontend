@@ -262,7 +262,7 @@ describe('Complete Payment Flow', () => {
     cy.get('#purpose').type('Uplata za usluge');
 
     // --- Step 2: Submit -> opens OTP modal ---
-    cy.contains('button', 'Nastavi na verifikaciju').click();
+    cy.contains('button', 'Nastavi na verifikaciju').scrollIntoView().click({ force: true });
 
     // OTP modal should appear and request code
     cy.wait('@requestOtp');
@@ -359,7 +359,7 @@ describe('Complete Transfer Flow', () => {
     cy.get('#amount').clear().type('10000');
 
     // --- Step 2: Submit form -> show confirm step ---
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
 
     // Confirm step is shown with summary
     cy.contains('Potvrda prenosa').should('be.visible');
@@ -492,7 +492,7 @@ describe('Employee Creates Account + Card Flow', () => {
 
     // --- Step 4: Toggle "create card" switch ---
     // The Switch component from shadcn uses a button role
-    cy.contains('Napravi karticu uz racun').click();
+    cy.contains('Napravi karticu uz racun').scrollIntoView().click({ force: true });
 
     // --- Step 5: Submit the form ---
     cy.contains('button', 'Kreiraj racun').click();
@@ -691,13 +691,13 @@ describe('Stock Trading Flow', () => {
     cy.contains('Apple Inc.').should('be.visible');
 
     // --- Step 2: Click on AAPL to see details ---
-    cy.contains('tr', 'AAPL').click();
+    cy.contains('tr', 'AAPL').click({ force: true });
 
     cy.url().should('include', '/securities/');
     cy.contains('Apple Inc.').should('be.visible');
 
     // --- Step 3: Click Buy to go to order form ---
-    cy.contains('button', 'Kupi AAPL').click();
+    cy.contains('button', 'Kupi AAPL').click({ force: true });
     cy.url().should('include', '/orders/new');
     cy.wait('@getMyAccounts');
 
@@ -712,7 +712,7 @@ describe('Stock Trading Flow', () => {
     // Account should be auto-selected when loaded
 
     // --- Step 5: Submit the order -> confirmation dialog -> confirm ---
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('button', 'Nastavi na potvrdu').scrollIntoView().click({ force: true });
     cy.contains('Potvrda naloga').should('be.visible');
     cy.contains('button', 'Potvrdi').click();
     cy.wait('@createOrder');

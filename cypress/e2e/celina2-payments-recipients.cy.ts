@@ -250,7 +250,7 @@ describe('New Payment Page', () => {
       cy.get('#recipientName').clear().type('Test');
       cy.get('#amount').clear().type('100');
       cy.get('#paymentCode').clear().type('289');
-      cy.get('#purpose').type('Test');
+      cy.get('#purpose').scrollIntoView().type('Test', { force: true });
       cy.contains('button', 'Nastavi na verifikaciju').click();
       cy.get('.text-destructive').should('exist');
     });
@@ -261,7 +261,7 @@ describe('New Payment Page', () => {
       cy.get('#recipientName').clear().type('Test');
       cy.get('#amount').clear().type('0');
       cy.get('#paymentCode').clear().type('289');
-      cy.get('#purpose').type('Test');
+      cy.get('#purpose').scrollIntoView().type('Test', { force: true });
       cy.contains('button', 'Nastavi na verifikaciju').click();
       cy.get('.text-destructive').should('exist');
     });

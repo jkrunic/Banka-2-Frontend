@@ -662,8 +662,8 @@ describe('Employee Portal - Account Cards Management', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getAccount');
     cy.wait('@getAccountCards');
-    // Find the first card's deactivate button (variant="destructive" renders with bg-destructive class)
-    cy.get('[class*="bg-destructive"]').filter('button').first().click({ force: true });
+    // Find the first card's deactivate button (variant="destructive")
+    cy.get('button.bg-destructive, button[class*="bg-destructive"]').first().click({ force: true });
     cy.wait('@deactivateCard');
   });
 

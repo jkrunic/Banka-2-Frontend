@@ -36,10 +36,12 @@ function setupCommonIntercepts() {
   cy.intercept('GET', '**/api/accounts/my', { statusCode: 200, body: mockAccounts });
   cy.intercept('GET', '**/api/payment-recipients', { statusCode: 200, body: mockRecipients });
   cy.intercept('GET', '**/api/exchange-rates', { statusCode: 200, body: [] });
-  cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: { content: [] } });
+  cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: [] });
+  cy.intercept('GET', '**/api/loans/requests/my*', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/transfers*', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/cards', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/payments*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
+  cy.intercept('POST', '**/api/payments/request-otp-email', { statusCode: 200, body: { sent: true } });
 }
 
 function setupOtpIntercepts() {
@@ -47,6 +49,24 @@ function setupOtpIntercepts() {
     statusCode: 200,
     body: { sent: true, message: 'OTP sent' },
   }).as('requestOtp');
+}
+
+/**
+ * Fill out the payment form using correct selectors for native <select> and react-hook-form input names.
+ */
+function fillPaymentForm() {
+  // Select source account via native <select>
+  cy.get('select[name="fromAccountNumber"]').select(mockAccounts[0].accountNumber);
+  // Fill recipient fields
+  cy.get('input[name="recipientName"]').type('Petar Petrovic');
+  cy.get('input[name="toAccountNumber"]').clear().type('265000000000000099');
+  cy.get('input[name="amount"]').clear().type('5000');
+  // paymentPurpose is a <textarea>, not <input>
+  cy.get('textarea[name="paymentPurpose"]').type('Test placanje');
+  // paymentCode already defaults to '289', clear and retype to be safe
+  cy.get('input[name="paymentCode"]').clear().type('289');
+  // Submit the form
+  cy.contains('button', 'Nastavi').click({ force: true });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -61,18 +81,7 @@ describe('OTP Verification - Payment Flow', () => {
 
   it('shows verification modal after payment form submission', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-
-    // Fill out the payment form
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-
-    // Submit the form - should open verification modal
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
   });
 
   it('displays OTP modal with timer and input', () => {
@@ -82,14 +91,7 @@ describe('OTP Verification - Payment Flow', () => {
     }).as('submitPayment');
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
 
     // Verification modal should appear
     cy.contains('Verifikacija transakcije').should('be.visible');
@@ -101,15 +103,7 @@ describe('OTP Verification - Payment Flow', () => {
 
   it('requests OTP when modal opens', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
-
+    fillPaymentForm();
     cy.wait('@requestOtp');
   });
 
@@ -120,14 +114,7 @@ describe('OTP Verification - Payment Flow', () => {
     }).as('submitPayment');
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Enter OTP code
@@ -137,14 +124,7 @@ describe('OTP Verification - Payment Flow', () => {
 
   it('shows OTP modal description about mobile app', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     cy.contains('mobilnu aplikaciju').should('be.visible');
@@ -152,14 +132,7 @@ describe('OTP Verification - Payment Flow', () => {
 
   it('shows Potvrdi and close buttons in OTP modal', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     cy.contains('button', 'Potvrdi').should('be.visible');
@@ -168,14 +141,7 @@ describe('OTP Verification - Payment Flow', () => {
 
   it('closes OTP modal when clicking close without completing payment', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     cy.get('button[aria-label="Zatvori"]').click();
@@ -193,35 +159,31 @@ describe('OTP Verification - Transfer Flow', () => {
     setupOtpIntercepts();
   });
 
-  it('shows verification step in transfer flow', () => {
-    cy.visit('/transfer', { onBeforeLoad: (win) => setupClientSession(win) });
-
-    // Select source account
-    cy.contains('Izaberite racun').first().click();
-    cy.get('[role="option"]').first().click();
+  it('shows transfer page with source account selector', () => {
+    cy.visit('/transfers', { onBeforeLoad: (win) => setupClientSession(win) });
+    // Transfer page should show account selectors
+    cy.get('select').should('have.length.at.least', 1);
   });
 
-  it('opens verification modal after transfer form submission', () => {
+  it('opens transfer page and selects source account', () => {
     cy.intercept('POST', '**/api/transfers/internal', {
       statusCode: 200,
       body: { id: 200, status: 'COMPLETED' },
     }).as('submitTransfer');
 
-    cy.visit('/transfer', { onBeforeLoad: (win) => setupClientSession(win) });
-    // Fill transfer form
-    cy.contains('Izaberite racun').first().click();
-    cy.get('[role="option"]').first().click();
+    cy.visit('/transfers', { onBeforeLoad: (win) => setupClientSession(win) });
+    // Select source account via native select
+    cy.get('select').first().select(mockAccounts[0].accountNumber);
   });
 
-  it('completes transfer with OTP verification', () => {
+  it('can select accounts for transfer', () => {
     cy.intercept('POST', '**/api/transfers/internal', {
       statusCode: 200,
       body: { id: 200, status: 'COMPLETED' },
     }).as('submitTransfer');
 
-    cy.visit('/transfer', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').first().click();
-    cy.get('[role="option"]').first().click();
+    cy.visit('/transfers', { onBeforeLoad: (win) => setupClientSession(win) });
+    cy.get('select').first().select(mockAccounts[0].accountNumber);
   });
 });
 
@@ -234,6 +196,8 @@ describe('OTP Verification - Limit Change Flow', () => {
     setupCommonIntercepts();
     setupOtpIntercepts();
     cy.intercept('GET', '**/api/accounts/1', { statusCode: 200, body: mockAccounts[0] }).as('getAccountDetail');
+    // Intercept transaction history for account details page
+    cy.intercept('GET', '**/api/payments/account/**', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
   });
 
   it('shows limit change dialog on account details page', () => {
@@ -251,7 +215,7 @@ describe('OTP Verification - Limit Change Flow', () => {
     cy.get('#monthlyLimit').should('be.visible');
   });
 
-  it('submits limit change and triggers OTP verification', () => {
+  it('submits limit change and triggers OTP verification modal', () => {
     cy.intercept('PATCH', '**/api/accounts/1/limits', {
       statusCode: 200,
       body: {},
@@ -263,6 +227,12 @@ describe('OTP Verification - Limit Change Flow', () => {
     cy.get('#dailyLimit').clear().type('600000');
     cy.get('#monthlyLimit').clear().type('3000000');
     cy.contains('button', 'Sacuvaj limite').click();
+    // Limit change now opens OTP verification modal
+    cy.contains('Verifikacija transakcije').should('be.visible');
+    cy.wait('@requestOtp');
+    // Enter OTP code and confirm
+    cy.get('input[name="code"]').type('123456');
+    cy.contains('button', 'Potvrdi').click();
     cy.wait('@changeLimits');
     cy.contains('Limiti su uspesno sacuvani').should('be.visible');
   });
@@ -288,6 +258,11 @@ describe('OTP Verification - Limit Change Flow', () => {
     cy.get('#dailyLimit').clear().type('600000');
     cy.get('#monthlyLimit').clear().type('3000000');
     cy.contains('button', 'Sacuvaj limite').click();
+    // Goes through OTP flow, then API returns error
+    cy.contains('Verifikacija transakcije').should('be.visible');
+    cy.wait('@requestOtp');
+    cy.get('input[name="code"]').type('123456');
+    cy.contains('button', 'Potvrdi').click();
     cy.wait('@changeLimitsError');
   });
 });
@@ -304,14 +279,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('shows error message for wrong OTP code', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Mock payment to fail with wrong OTP
@@ -326,14 +294,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('shows remaining attempts counter', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // The modal should show attempts remaining (3)
@@ -342,14 +303,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('shows countdown timer starting from 05:00', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Timer should start at 05:00 or 04:59
@@ -358,14 +312,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('validates OTP code length (6 digits)', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Type only 3 digits - should not allow submission
@@ -382,14 +329,7 @@ describe('OTP Verification - Failed Scenarios', () => {
     }).as('requestOtpError');
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtpError');
   });
 
@@ -401,14 +341,7 @@ describe('OTP Verification - Failed Scenarios', () => {
     }).as('paymentSlow');
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     cy.get('input[name="code"]').type('123456');
@@ -419,14 +352,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('shows shield icon in OTP modal header', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Shield icon in gradient container
@@ -435,14 +361,7 @@ describe('OTP Verification - Failed Scenarios', () => {
 
   it('shows OTP modal with backdrop overlay', () => {
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Overlay should exist
@@ -463,14 +382,7 @@ describe('OTP Verification - Edge Cases', () => {
     setupOtpIntercepts();
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Close the modal without entering code
@@ -484,14 +396,7 @@ describe('OTP Verification - Edge Cases', () => {
     setupOtpIntercepts();
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Type non-digits
@@ -508,14 +413,7 @@ describe('OTP Verification - Edge Cases', () => {
     }).as('paymentVerySlow');
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     cy.get('input[name="code"]').type('123456');
@@ -528,14 +426,7 @@ describe('OTP Verification - Edge Cases', () => {
     setupOtpIntercepts();
 
     cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.contains('Izaberite racun').click();
-    cy.get('[role="option"]').first().click();
-    cy.get('input[name="recipientName"]').type('Petar Petrovic');
-    cy.get('input[name="recipientAccountNumber"]').type('265000000000000099');
-    cy.get('input[name="amount"]').type('5000');
-    cy.get('input[name="paymentPurpose"]').type('Test placanje');
-    cy.get('input[name="paymentCode"]').type('289');
-    cy.contains('button', 'Nastavi').click({ force: true });
+    fillPaymentForm();
     cy.wait('@requestOtp');
 
     // Modal should contain shield/email related SVG

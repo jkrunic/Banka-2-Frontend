@@ -205,13 +205,13 @@ describe('Margin Accounts - Deposit', () => {
   it('shows deposit button for active margin accounts', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').should('exist');
+    cy.contains('button', 'Uplati').should('exist');
   });
 
   it('opens deposit dialog when clicking Uplata button', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
     // Dialog should appear with amount input
     cy.get('input').should('exist');
   });
@@ -224,30 +224,30 @@ describe('Margin Accounts - Deposit', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     // Enter amount
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('50000');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@deposit');
   });
 
   it('shows validation error for zero amount', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('0');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
   });
 
   it('shows validation error for negative amount', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('-100');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
   });
 
   it('handles deposit API error', () => {
@@ -258,10 +258,10 @@ describe('Margin Accounts - Deposit', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('50000');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@depositError');
   });
 
@@ -273,10 +273,10 @@ describe('Margin Accounts - Deposit', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('50000');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@deposit');
     // Should reload margin accounts
     cy.wait('@getMarginAccounts');
@@ -285,7 +285,7 @@ describe('Margin Accounts - Deposit', () => {
   it('closes deposit dialog when clicking cancel', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Uplata').first().click();
+    cy.contains('button', 'Uplati').first().click();
 
     // Close the dialog
     cy.get('button[aria-label="Close"], button:has(svg)').last().click({ force: true });
@@ -308,13 +308,13 @@ describe('Margin Accounts - Withdraw', () => {
   it('shows withdraw button for active margin accounts', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Isplata').should('exist');
+    cy.contains('button', 'Isplati').should('exist');
   });
 
   it('opens withdraw dialog when clicking Isplata button', () => {
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Isplata').first().click();
+    cy.contains('button', 'Isplati').first().click();
     cy.get('input').should('exist');
   });
 
@@ -326,10 +326,10 @@ describe('Margin Accounts - Withdraw', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Isplata').first().click();
+    cy.contains('button', 'Isplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('25000');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@withdraw');
   });
 
@@ -341,10 +341,10 @@ describe('Margin Accounts - Withdraw', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Isplata').first().click();
+    cy.contains('button', 'Isplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('999999');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@withdrawError');
   });
 
@@ -364,10 +364,10 @@ describe('Margin Accounts - Withdraw', () => {
 
     cy.visit('/margin-accounts', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMarginAccounts');
-    cy.contains('button', 'Isplata').first().click();
+    cy.contains('button', 'Isplati').first().click();
 
     cy.get('input[type="number"], input[inputmode="decimal"]').last().type('25000');
-    cy.contains('button', 'Potvrdi').click();
+    cy.contains('button', /Uplati|Isplati/).last().click();
     cy.wait('@withdraw');
     cy.wait('@getMarginAccounts');
   });

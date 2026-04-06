@@ -170,7 +170,7 @@ describe('CardListPage', () => {
 
     await waitFor(() => {
       // Either "Nema kartica" or some empty state text
-      const emptyState = screen.queryByText(/Nema kartic|Nemate kartic/i);
+      screen.queryByText(/Nema kartic|Nemate kartic/i);
       // Or at minimum the page loaded without cards
       expect(mockCardService.getMyCards).toHaveBeenCalled();
     });

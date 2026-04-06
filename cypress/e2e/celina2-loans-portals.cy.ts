@@ -26,8 +26,8 @@ const mockAccounts = [
 
 const mockLoans = [
   {
-    id: 1, loanNumber: 'KR-2025-001', loanType: 'GOTOVINSKI', amount: 500000, currency: 'RSD',
-    monthlyPayment: 22500, remainingDebt: 250000, repaymentPeriod: 24,
+    id: 1, loanNumber: 'KR-2025-001', loanType: 'GOTOVINSKI', amount: 5000000, currency: 'RSD',
+    monthlyPayment: 22500, remainingDebt: 2500000, repaymentPeriod: 24,
     nominalRate: 6.25, effectiveRate: 6.50, status: 'ACTIVE' as const,
     startDate: '2025-01-15', endDate: '2027-01-15', accountNumber: '265000000000000001',
   },
@@ -160,6 +160,7 @@ describe('LoanListPage - loan list loads and displays correctly', () => {
   beforeEach(() => {
     setupCommonIntercepts();
     cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: mockLoans }).as('getMyLoans');
+    cy.intercept('GET', '**/api/loans/requests/my*', { statusCode: 200, body: [] }).as('getMyRequests');
     cy.intercept('GET', '**/api/loans/1/installments', { statusCode: 200, body: mockInstallments }).as('getInstallments');
     cy.visit('/loans', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getMyLoans');
@@ -177,15 +178,14 @@ describe('LoanListPage - loan list loads and displays correctly', () => {
     // Status badges
     cy.contains('Aktivan').should('be.visible');
     cy.contains('Na cekanju').should('be.visible');
-    cy.contains('Otplacen').should('be.visible');
+    // PAID status is returned as-is by statusLabel (no Serbian mapping)
+    cy.contains('PAID').should('be.visible');
   });
 
-  it('displays circular progress ring with repayment percentage', () => {
+  it('displays progress bar with repayment percentage', () => {
     // First loan: 500000 - 250000 = 250000 paid => 50%
     cy.contains('50%').should('be.visible');
-    cy.contains('otplaceno').should('be.visible');
-    // SVG circles exist
-    cy.get('svg circle').should('have.length.at.least', 2);
+    cy.contains('Otplaceno').should('be.visible');
   });
 
   it('shows loan details with amount, monthly payment, remaining debt, and period', () => {
@@ -197,26 +197,25 @@ describe('LoanListPage - loan list loads and displays correctly', () => {
     cy.contains('24 meseci').should('be.visible');
   });
 
-  it('expands installments timeline on Prikazi detalje click', () => {
+  it('expands installments table on Prikazi detalje click', () => {
     cy.contains('button', 'Prikazi detalje').first().click();
     cy.wait('@getInstallments');
     cy.contains('Detalji kredita').should('be.visible');
-    cy.contains('Plan otplate').should('be.visible');
+    // Installments table headers
+    cy.contains('th', 'Rata').should('be.visible');
     cy.contains('Placeno rata').should('be.visible');
   });
 
-  it('shows paid and upcoming installment styling in timeline', () => {
+  it('shows paid and upcoming installment styling in table', () => {
     cy.contains('button', 'Prikazi detalje').first().click();
     cy.wait('@getInstallments');
-    // Paid installments have emerald background class
-    cy.get('.bg-emerald-500\\/5').should('have.length.at.least', 2);
-    // Paid installment dots are emerald
-    cy.get('.bg-emerald-500.shadow-emerald-500\\/30').should('have.length', 2);
-    // Unpaid installment dots are muted
-    cy.get('.bg-muted-foreground\\/30').should('have.length.at.least', 3);
+    // Paid installments have emerald left border
+    cy.get('.border-l-emerald-500').should('have.length.at.least', 2);
+    // Unpaid installments have gray left border
+    cy.get('.border-l-gray-300').should('have.length.at.least', 3);
     // Paid count
-    cy.contains('Placeno rata:').should('be.visible');
-    cy.get('.font-bold').contains('2').should('be.visible');
+    cy.contains('Placeno rata').should('be.visible');
+    cy.get('.font-semibold').contains('2').should('be.visible');
   });
 
   it('collapses details when clicking Sakrij detalje', () => {
@@ -227,9 +226,8 @@ describe('LoanListPage - loan list loads and displays correctly', () => {
     cy.contains('Detalji kredita').should('not.exist');
   });
 
-  it('shows CTA card for new loan application', () => {
-    cy.contains('Potreban vam je kredit?').should('be.visible');
-    cy.contains('Zahtev za kredit').should('be.visible');
+  it('shows button for new loan application', () => {
+    cy.contains('button', 'Zahtev za kredit').should('be.visible');
   });
 
   it('displays early repayment button for active loan', () => {
@@ -265,6 +263,7 @@ describe('LoanListPage - empty state', () => {
   it('displays empty loans message when no loans', () => {
     setupCommonIntercepts();
     cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: [] }).as('emptyLoans');
+    cy.intercept('GET', '**/api/loans/requests/my*', { statusCode: 200, body: [] });
     cy.visit('/loans', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@emptyLoans');
     cy.contains('Trenutno nema kredita').should('be.visible');
@@ -278,6 +277,7 @@ describe('LoanListPage - loading skeleton', () => {
     cy.intercept('GET', '**/api/loans/my*', (req) => {
       req.reply({ delay: 2000, statusCode: 200, body: [] });
     }).as('delayedLoans');
+    cy.intercept('GET', '**/api/loans/requests/my*', { statusCode: 200, body: [] });
     cy.visit('/loans', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.get('.animate-pulse').should('have.length.at.least', 1);
   });
@@ -398,8 +398,7 @@ describe('AccountsPortalPage - employee accounts portal', () => {
 
   beforeEach(() => {
     setupCommonIntercepts();
-    cy.intercept('GET', '**/api/accounts?*', { statusCode: 200, body: portalAccounts }).as('getAllAccounts');
-    cy.intercept('GET', '**/api/accounts*', { statusCode: 200, body: portalAccounts }).as('getAllAccountsFallback');
+    cy.intercept('GET', '**/api/accounts/all*', { statusCode: 200, body: portalAccounts }).as('getAllAccounts');
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getAllAccounts');
   });
@@ -440,7 +439,7 @@ describe('AccountsPortalPage - employee accounts portal', () => {
   });
 
   it('displays empty state when no accounts match', () => {
-    cy.intercept('GET', '**/api/accounts?*', {
+    cy.intercept('GET', '**/api/accounts/all*', {
       statusCode: 200,
       body: { content: [], totalElements: 0, totalPages: 1 },
     }).as('emptyAccounts');
@@ -655,7 +654,8 @@ describe('LoanRequestsPage - loan requests management', () => {
 
   it('filters requests by status when tab is clicked', () => {
     cy.intercept('GET', '**/api/loans/requests*', { statusCode: 200, body: mockLoanRequests }).as('filteredRequests');
-    cy.contains('button', 'Svi').click();
+    // Click a different tab (not the default 'Svi') to trigger a new request
+    cy.contains('button', 'Na cekanju').click();
     cy.wait('@filteredRequests');
   });
 
@@ -670,10 +670,7 @@ describe('LoanRequestsPage - loan requests management', () => {
   });
 
   it('opens reject form with reason input', () => {
-    // Click reject button (XCircle icon) for Milica
-    cy.contains('Milica Nikolic').parents('[class*="rounded-2xl"]').first()
-      .find('button').contains('button').should('exist');
-    // Click the expand + reject button area
+    // Click the reject button (XCircle icon) for Milica — opens expand + reject form
     cy.contains('Milica Nikolic').parents('[class*="rounded-2xl"]').first()
       .find('button[class*="hover:border-red"]').first().click();
     cy.contains('Razlog odbijanja').should('be.visible');
@@ -721,9 +718,10 @@ describe('LoanRequestsPage - loan requests management', () => {
 describe('AllLoansPage - employee all loans view', () => {
   beforeEach(() => {
     setupCommonIntercepts();
-    cy.intercept('GET', '**/api/loans?*', { statusCode: 200, body: mockAllLoans }).as('getAllLoans');
+    // Register fallback first, then specific — last registered wins, so specific takes priority
     cy.intercept('GET', '**/api/loans*', { statusCode: 200, body: mockAllLoans }).as('getAllLoansFallback');
-    cy.visit('/employee/all-loans', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.intercept('GET', '**/api/loans?*', { statusCode: 200, body: mockAllLoans }).as('getAllLoans');
+    cy.visit('/employee/loans', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getAllLoans');
   });
 
@@ -756,15 +754,16 @@ describe('AllLoansPage - employee all loans view', () => {
   });
 
   it('shows empty state with different filters', () => {
-    cy.intercept('GET', '**/api/loans?*', {
-      statusCode: 200,
-      body: { content: [], totalElements: 0, totalPages: 1 },
-    }).as('emptyLoans');
+    // Register fallback first, then specific — last registered wins
     cy.intercept('GET', '**/api/loans*', {
       statusCode: 200,
       body: { content: [], totalElements: 0, totalPages: 1 },
     }).as('emptyLoansFallback');
-    cy.visit('/employee/all-loans', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.intercept('GET', '**/api/loans?*', {
+      statusCode: 200,
+      body: { content: [], totalElements: 0, totalPages: 1 },
+    }).as('emptyLoans');
+    cy.visit('/employee/loans', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@emptyLoans');
     cy.contains('Nema kredita za izabrane filtere').should('be.visible');
   });

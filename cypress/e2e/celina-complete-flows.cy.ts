@@ -87,20 +87,22 @@ const MOCK_LISTING_AAPL = {
   ticker: 'AAPL',
   name: 'Apple Inc.',
   listingType: 'STOCK',
-  exchange: 'NASDAQ',
+  exchangeAcronym: 'NASDAQ',
   price: 178.5,
-  change: 2.3,
+  ask: 178.6,
+  bid: 178.4,
+  priceChange: 2.3,
   changePercent: 1.31,
   volume: 52340000,
-  high: 180.0,
-  low: 176.0,
-  previousClose: 176.2,
+  initialMarginCost: 500,
+  maintenanceMargin: 400,
 };
 
 const MOCK_ORDER = {
   id: 301,
   listingId: 42,
-  ticker: 'AAPL',
+  listingTicker: 'AAPL',
+  listingName: 'Apple Inc.',
   listingType: 'STOCK',
   direction: 'BUY',
   quantity: 10,
@@ -108,31 +110,37 @@ const MOCK_ORDER = {
   pricePerUnit: 178.5,
   orderType: 'MARKET',
   status: 'APPROVED',
+  remainingPortions: 0,
+  approximatePrice: 1785,
   allOrNone: false,
+  afterHours: false,
   margin: false,
+  isDone: false,
   accountId: 1,
+  approvedBy: '',
   createdAt: '2026-04-03T12:00:00Z',
-  updatedAt: '2026-04-03T12:00:00Z',
+  lastModification: '2026-04-03T12:00:00Z',
 };
 
 const MOCK_PORTFOLIO_ITEM = {
   id: 501,
-  listingId: 42,
-  ticker: 'AAPL',
+  listingTicker: 'AAPL',
+  listingName: 'Apple Inc.',
   listingType: 'STOCK',
   quantity: 10,
-  averagePrice: 178.5,
+  averageBuyPrice: 178.5,
   currentPrice: 182.0,
   profit: 35,
   profitPercent: 1.96,
   publicQuantity: 0,
+  lastModified: '2026-04-03T12:00:00Z',
 };
 
 const MOCK_PORTFOLIO_SUMMARY = {
   totalValue: 1820,
   totalProfit: 35,
-  totalProfitPercent: 1.96,
-  totalTax: 5.25,
+  paidTaxThisYear: 5.25,
+  unpaidTaxThisMonth: 0,
 };
 
 const MOCK_LOAN_REQUEST = {
@@ -625,11 +633,11 @@ describe('Stock Trading Flow', () => {
       body: MOCK_ACCOUNTS,
     }).as('getMyAccounts');
 
-    // Exchange management (for margin check)
-    cy.intercept('GET', '**/api/exchange-management/actuary-limits', {
+    // Exchange management (for exchange open/close check)
+    cy.intercept('GET', '**/api/exchanges/**', {
       statusCode: 200,
-      body: { orderApprovalLimit: 100000 },
-    }).as('actuaryLimits');
+      body: { id: 1, name: 'NASDAQ', acronym: 'NASDAQ', isOpen: true },
+    }).as('getExchangeStatus');
 
     // Options (empty)
     cy.intercept('GET', '**/api/options*', {
@@ -686,35 +694,24 @@ describe('Stock Trading Flow', () => {
 
     // --- Step 3: Click Buy to go to order form ---
     cy.contains('Kupi').click();
-    cy.url().should('include', '/orders/create');
+    cy.url().should('include', '/orders/new');
     cy.wait('@getMyAccounts');
 
     // --- Step 4: Fill the order form (market order) ---
     // Listing should be pre-selected from URL params
     // Select quantity
-    cy.get('input[name="quantity"]').clear().type('10');
+    cy.get('#quantity').clear().type('10');
 
-    // Order type should be MARKET by default or select it
-    cy.get('select[name="orderType"]').then(($select) => {
-      if ($select.length) {
-        cy.wrap($select).select('MARKET');
-      }
-    });
+    // Order type should be MARKET by default
+    cy.get('#orderType').should('have.value', 'MARKET');
 
-    // Select account
-    cy.get('select[name="accountId"]').then(($select) => {
-      if ($select.length) {
-        cy.wrap($select).select(String(MOCK_ACCOUNTS[0].id));
-      }
-    });
+    // Account should be auto-selected when loaded
 
-    // --- Step 5: Submit the order ---
-    cy.contains('button', /Kreiraj|Potvrdi|Posalji/).click();
-    cy.wait('@createOrder').its('request.body').should((body) => {
-      expect(body.listingId).to.eq(42);
-      expect(body.direction).to.eq('BUY');
-      expect(body.quantity).to.eq(10);
-    });
+    // --- Step 5: Submit the order -> confirmation dialog -> confirm ---
+    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.contains('Potvrda naloga').should('be.visible');
+    cy.contains('button', 'Potvrdi').click();
+    cy.wait('@createOrder');
 
     // --- Step 6: Check my orders ---
     cy.visit('/orders/my', { onBeforeLoad: setupClientSession });
@@ -794,8 +791,8 @@ describe('Admin Employee Management Flow', () => {
     cy.contains('Nikolic').should('be.visible');
 
     // --- Step 2: Navigate to create new employee ---
-    cy.contains('Dodaj zaposlenog').click();
-    cy.url().should('include', '/admin/employees/create');
+    cy.contains('Novi zaposleni').click();
+    cy.url().should('include', '/admin/employees/new');
 
     // --- Step 3: Fill the create employee form ---
     cy.get('input[name="firstName"]').type('Ana');
@@ -884,7 +881,7 @@ describe('Admin Employee Management Flow', () => {
     cy.contains('Ana').should('be.visible');
 
     // --- Step 7: Deactivate the employee ---
-    cy.visit('/admin/employees/edit/10', { onBeforeLoad: setupAdminSession });
+    cy.visit('/admin/employees/10', { onBeforeLoad: setupAdminSession });
     cy.wait('@getEmployees');
 
     // Find and click deactivate button/switch

@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import ClientsPortalPage from './ClientsPortalPage';
 import { renderWithProviders } from '../../test/test-utils';
 import type { Client, PaginatedResponse } from '@/types';
-import type { Account } from '@/types/celina2';
 
 const mockNavigate = vi.fn();
 
@@ -410,10 +409,6 @@ describe('ClientsPortalPage', () => {
     });
 
     // Click next page button (ChevronRight)
-    const buttons = screen.getAllByRole('button');
-    const nextButton = buttons.find(
-      (b) => !b.hasAttribute('disabled') && b.querySelector('svg')?.classList.toString().includes('lucide')
-    );
     // Find the pagination next button (last icon button that is not disabled)
     const paginationButtons = screen.getAllByRole('button').filter(
       (btn) => btn.className.includes('h-8 w-8')

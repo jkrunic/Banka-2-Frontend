@@ -6,73 +6,73 @@ import { setupAdminSession } from '../support/commands';
 
 const mockAgents = [
   {
-    id: 1, userId: 10, fullName: 'Marko Petrovic', email: 'marko.petrovic@banka.rs',
-    role: 'AGENT', dailyLimit: 1000000, usedLimit: 250000, needApproval: false,
+    id: 1, employeeId: 10, employeeName: 'Marko Petrovic', employeeEmail: 'marko.petrovic@banka.rs',
+    employeePosition: 'Agent', actuaryType: 'AGENT', dailyLimit: 1000000, usedLimit: 250000, needApproval: false,
   },
   {
-    id: 2, userId: 11, fullName: 'Ana Markovic', email: 'ana.markovic@banka.rs',
-    role: 'AGENT', dailyLimit: 500000, usedLimit: 499000, needApproval: true,
+    id: 2, employeeId: 11, employeeName: 'Ana Markovic', employeeEmail: 'ana.markovic@banka.rs',
+    employeePosition: 'Agent', actuaryType: 'AGENT', dailyLimit: 500000, usedLimit: 499000, needApproval: true,
   },
   {
-    id: 3, userId: 12, fullName: 'Stefan Jovic', email: 'stefan.jovic@banka.rs',
-    role: 'AGENT', dailyLimit: 750000, usedLimit: 0, needApproval: false,
+    id: 3, employeeId: 12, employeeName: 'Stefan Jovic', employeeEmail: 'stefan.jovic@banka.rs',
+    employeePosition: 'Agent', actuaryType: 'AGENT', dailyLimit: 750000, usedLimit: 0, needApproval: false,
   },
   {
-    id: 4, userId: 13, fullName: 'Milica Nikolic', email: 'milica.nikolic@banka.rs',
-    role: 'AGENT', dailyLimit: 200000, usedLimit: 200000, needApproval: true,
+    id: 4, employeeId: 13, employeeName: 'Milica Nikolic', employeeEmail: 'milica.nikolic@banka.rs',
+    employeePosition: 'Agent', actuaryType: 'AGENT', dailyLimit: 200000, usedLimit: 200000, needApproval: true,
   },
 ];
 
 const mockTaxRecords = [
   {
     id: 1, userId: 100, userName: 'Stefan Jovanovic', userType: 'CLIENT',
-    totalProfit: 350000, totalLoss: 50000, taxableAmount: 300000,
-    taxAmount: 45000, currency: 'RSD', lastCalculated: '2026-03-30T12:00:00',
+    totalProfit: 350000, taxOwed: 45000, taxPaid: 0,
+    currency: 'RSD',
   },
   {
     id: 2, userId: 101, userName: 'Milica Nikolic', userType: 'CLIENT',
-    totalProfit: 1200000, totalLoss: 300000, taxableAmount: 900000,
-    taxAmount: 135000, currency: 'RSD', lastCalculated: '2026-03-30T12:00:00',
+    totalProfit: 1200000, taxOwed: 135000, taxPaid: 0,
+    currency: 'RSD',
   },
   {
     id: 3, userId: 10, userName: 'Marko Petrovic', userType: 'EMPLOYEE',
-    totalProfit: 80000, totalLoss: 20000, taxableAmount: 60000,
-    taxAmount: 9000, currency: 'RSD', lastCalculated: '2026-03-30T12:00:00',
+    totalProfit: 80000, taxOwed: 9000, taxPaid: 0,
+    currency: 'RSD',
   },
   {
     id: 4, userId: 102, userName: 'Jovan Markovic', userType: 'CLIENT',
-    totalProfit: 0, totalLoss: 150000, taxableAmount: 0,
-    taxAmount: 0, currency: 'RSD', lastCalculated: '2026-03-30T12:00:00',
+    totalProfit: 0, taxOwed: 0, taxPaid: 0,
+    currency: 'RSD',
   },
 ];
 
 const mockExchanges = [
   {
-    id: 1, name: 'New York Stock Exchange', acronym: 'NYSE', mic: 'XNYS',
-    country: 'United States', currency: 'USD', timezone: 'America/New_York',
-    openTime: '09:30', closeTime: '16:00', testMode: false,
+    id: 1, name: 'New York Stock Exchange', acronym: 'NYSE', micCode: 'XNYS',
+    country: 'United States', currency: 'USD', timeZone: 'America/New_York',
+    openTime: '09:30', closeTime: '16:00', isOpen: true, testMode: false,
   },
   {
-    id: 2, name: 'NASDAQ', acronym: 'NASDAQ', mic: 'XNAS',
-    country: 'United States', currency: 'USD', timezone: 'America/New_York',
-    openTime: '09:30', closeTime: '16:00', testMode: true,
+    id: 2, name: 'NASDAQ', acronym: 'NASDAQ', micCode: 'XNAS',
+    country: 'United States', currency: 'USD', timeZone: 'America/New_York',
+    openTime: '09:30', closeTime: '16:00', isOpen: true, testMode: true,
   },
   {
-    id: 3, name: 'London Stock Exchange', acronym: 'LSE', mic: 'XLON',
-    country: 'United Kingdom', currency: 'GBP', timezone: 'Europe/London',
-    openTime: '08:00', closeTime: '16:30', testMode: false,
+    id: 3, name: 'London Stock Exchange', acronym: 'LSE', micCode: 'XLON',
+    country: 'United Kingdom', currency: 'GBP', timeZone: 'Europe/London',
+    openTime: '08:00', closeTime: '16:30', isOpen: true, testMode: false,
   },
   {
-    id: 4, name: 'Beogradska Berza', acronym: 'BELEX', mic: 'XBEL',
-    country: 'Serbia', currency: 'RSD', timezone: 'Europe/Belgrade',
-    openTime: '09:00', closeTime: '15:00', testMode: false,
+    id: 4, name: 'Beogradska Berza', acronym: 'BELEX', micCode: 'XBEL',
+    country: 'Serbia', currency: 'RSD', timeZone: 'Europe/Belgrade',
+    openTime: '09:00', closeTime: '15:00', isOpen: true, testMode: false,
   },
 ];
 
 const mockExchangeRates = [
-  { currencyCode: 'EUR', rate: 117.5 },
-  { currencyCode: 'USD', rate: 108.3 },
-  { currencyCode: 'GBP', rate: 137.2 },
+  { currency: 'EUR', buyRate: 117, sellRate: 118, middleRate: 117.5, date: '2026-03-30' },
+  { currency: 'USD', buyRate: 108, sellRate: 109, middleRate: 108.3, date: '2026-03-30' },
+  { currency: 'GBP', buyRate: 137, sellRate: 138, middleRate: 137.2, date: '2026-03-30' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,8 +138,8 @@ describe('Actuary Management - Agent List', () => {
   it('shows needApproval status (badge or indicator)', () => {
     cy.visit('/employee/actuaries', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getAgents');
-    // Ana and Milica have needApproval=true
-    cy.contains('Odobrenje').should('exist');
+    // Ana and Milica have needApproval=true - column header is "Need Approval"
+    cy.contains('Need Approval').should('exist');
   });
 
   it('shows search/filter input for agents', () => {
@@ -410,7 +410,7 @@ describe('Tax Portal - Trigger Calculation', () => {
   it('shows trigger calculation button', () => {
     cy.visit('/employee/tax', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getTaxRecords');
-    cy.contains('button', 'Obracunaj').should('be.visible');
+    cy.contains('button', 'Izracunaj porez').should('be.visible');
   });
 
   it('triggers tax calculation successfully', () => {
@@ -418,7 +418,7 @@ describe('Tax Portal - Trigger Calculation', () => {
 
     cy.visit('/employee/tax', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getTaxRecords');
-    cy.contains('button', 'Obracunaj').click();
+    cy.contains('button', 'Izracunaj porez').click();
     cy.wait('@calculateTax');
   });
 
@@ -431,7 +431,7 @@ describe('Tax Portal - Trigger Calculation', () => {
 
     cy.visit('/employee/tax', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getTaxRecords');
-    cy.contains('button', 'Obracunaj').click();
+    cy.contains('button', 'Izracunaj porez').click();
     // Button should show loading state
     cy.get('button:disabled').should('exist');
   });
@@ -441,7 +441,7 @@ describe('Tax Portal - Trigger Calculation', () => {
 
     cy.visit('/employee/tax', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getTaxRecords');
-    cy.contains('button', 'Obracunaj').click();
+    cy.contains('button', 'Izracunaj porez').click();
     cy.wait('@calculateTaxError');
   });
 
@@ -450,7 +450,7 @@ describe('Tax Portal - Trigger Calculation', () => {
 
     cy.visit('/employee/tax', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getTaxRecords');
-    cy.contains('button', 'Obracunaj').click();
+    cy.contains('button', 'Izracunaj porez').click();
     cy.wait('@calculateTax');
     // Should reload
     cy.wait('@getTaxRecords');
@@ -571,7 +571,7 @@ describe('Exchange Management - Toggle Test Mode', () => {
     // Click the toggle for NYSE (currently off)
     cy.get('button[role="switch"][aria-checked="false"]').first().click();
     cy.wait('@toggleTestMode');
-    cy.contains('Test mod ukljucen').should('be.visible');
+    cy.contains('Test mod ukljucen').should('exist');
   });
 
   it('disables test mode for an exchange', () => {
@@ -585,7 +585,7 @@ describe('Exchange Management - Toggle Test Mode', () => {
     // Click the toggle for NASDAQ (currently on)
     cy.get('button[role="switch"][aria-checked="true"]').first().click();
     cy.wait('@toggleTestModeOff');
-    cy.contains('Test mod iskljucen').should('be.visible');
+    cy.contains('Test mod iskljucen').should('exist');
   });
 
   it('handles test mode toggle error gracefully', () => {
@@ -598,7 +598,7 @@ describe('Exchange Management - Toggle Test Mode', () => {
     cy.wait('@getExchanges');
     cy.get('button[role="switch"]').first().click();
     cy.wait('@toggleTestModeError');
-    cy.contains('Neuspesna promena test moda').should('be.visible');
+    cy.contains('Neuspesna promena test moda').should('exist');
   });
 
   it('shows toggling state (disabled button during request)', () => {

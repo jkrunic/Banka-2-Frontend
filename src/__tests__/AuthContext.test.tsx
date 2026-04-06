@@ -1,5 +1,5 @@
+import React from 'react';
 import { render, screen, act, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { Permission } from '../types';
@@ -223,22 +223,29 @@ describe('AuthContext', () => {
     });
     vi.mocked(decodeJwt).mockReturnValue(null);
 
-    // Use a component that exposes login as a callable to catch the error
-    let loginFn: ((creds: { email: string; password: string }) => Promise<void>) | undefined;
-    function LoginCapture() {
+    // Use a component that attempts login and captures the error
+    let caughtError: Error | undefined;
+    function LoginAttempt() {
       const { login } = useAuth();
-      loginFn = login;
+      React.useEffect(() => {
+        login({ email: 'test@x.rs', password: '123' }).catch((err: Error) => {
+          caughtError = err;
+        });
+      }, [login]);
       return null;
     }
 
     render(
       <AuthProvider>
-        <LoginCapture />
+        <LoginAttempt />
       </AuthProvider>
     );
 
     // login() should throw 'Neispravan token' when decodeJwt returns null
-    await expect(loginFn!({ email: 'test@x.rs', password: '123' })).rejects.toThrow('Neispravan token');
+    await waitFor(() => {
+      expect(caughtError).toBeDefined();
+      expect(caughtError!.message).toContain('Neispravan token');
+    });
   });
 
   it('logout clears sessionStorage and user state', async () => {

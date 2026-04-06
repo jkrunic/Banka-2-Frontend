@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import api from './api';
 import { creditService } from './creditService';
+import type { LoanType, InterestRateType, LoanStatus } from '../types/celina2';
 
 vi.mock('./api');
 const mockedApi = vi.mocked(api);
@@ -77,7 +78,7 @@ describe('creditService', () => {
       };
       mockedApi.get.mockResolvedValue({ data: mockResponse });
 
-      const result = await creditService.getAll({ loanType: 'GOTOVINSKI' as any });
+      const result = await creditService.getAll({ loanType: 'GOTOVINSKI' as LoanType });
 
       const params = mockedApi.get.mock.calls[0][1]?.params as URLSearchParams;
       expect(params.get('loanType')).toBe('CASH');
@@ -88,7 +89,7 @@ describe('creditService', () => {
       mockedApi.get.mockResolvedValue({ data: { content: [] } });
 
       await creditService.getAll({
-        status: 'ACTIVE' as any,
+        status: 'ACTIVE' as LoanStatus,
         accountNumber: '111111111111111111',
         page: 1,
         limit: 10,
@@ -157,8 +158,8 @@ describe('creditService', () => {
   describe('apply', () => {
     it('should submit loan application with FE to BE type mapping', async () => {
       const applicationData = {
-        loanType: 'GOTOVINSKI' as any,
-        interestRateType: 'FIKSNI' as any,
+        loanType: 'GOTOVINSKI' as LoanType,
+        interestRateType: 'FIKSNI' as InterestRateType,
         amount: 100000,
         currency: 'RSD' as const,
         loanPurpose: 'Kupovina automobila',
@@ -194,8 +195,8 @@ describe('creditService', () => {
 
     it('should handle BE types passed directly', async () => {
       const applicationData = {
-        loanType: 'CASH' as any,
-        interestRateType: 'FIXED' as any,
+        loanType: 'CASH' as LoanType,
+        interestRateType: 'FIXED' as InterestRateType,
         amount: 50000,
         currency: 'RSD' as const,
         loanPurpose: 'Test',
@@ -216,8 +217,8 @@ describe('creditService', () => {
       mockedApi.post.mockRejectedValue(new Error('Validation error'));
       await expect(
         creditService.apply({
-          loanType: 'GOTOVINSKI' as any,
-          interestRateType: 'FIKSNI' as any,
+          loanType: 'GOTOVINSKI' as LoanType,
+          interestRateType: 'FIKSNI' as InterestRateType,
           amount: 0,
           currency: 'RSD' as const,
           loanPurpose: '',
@@ -356,7 +357,7 @@ describe('creditService', () => {
       };
       mockedApi.get.mockResolvedValue({ data: mockResponse });
 
-      const result = await creditService.getRequests({ status: 'PENDING' as any, page: 0, limit: 20 });
+      const result = await creditService.getRequests({ status: 'PENDING' as LoanStatus, page: 0, limit: 20 });
 
       const params = mockedApi.get.mock.calls[0][1]?.params as URLSearchParams;
       expect(params.get('status')).toBe('PENDING');

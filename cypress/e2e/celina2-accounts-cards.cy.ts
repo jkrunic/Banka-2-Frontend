@@ -184,6 +184,8 @@ function setupCommonIntercepts() {
   cy.intercept('GET', '**/api/exchange-rates', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: { content: [] } });
   cy.intercept('GET', '**/api/transfers*', { statusCode: 200, body: [] });
+  // Default cards intercept — individual tests override with their own alias
+  cy.intercept('GET', '**/api/cards', { statusCode: 200, body: [] });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -320,10 +322,11 @@ describe('Accounts - Account List Page', () => {
     cy.contains('Svi tipovi').click();
     cy.get('[role="option"]').contains('Tekuci').click();
 
-    // Only CHECKING account should be visible
-    cy.contains('Glavni racun').should('be.visible');
-    cy.contains('Devizni EUR').should('not.exist');
-    cy.contains('Poslovni racun').should('not.exist');
+    // Only CHECKING account should be visible in the account cards
+    cy.contains('h3', 'Glavni racun').should('be.visible');
+    // The filtered-out account names should not appear in any h3 (account card title)
+    cy.contains('h3', 'Devizni EUR').should('not.exist');
+    cy.contains('h3', 'Poslovni racun').should('not.exist');
   });
 
   it('shows daily and monthly limit progress bars on account cards', () => {
@@ -451,7 +454,11 @@ describe('Accounts - Account Details Page', () => {
     cy.contains('Naziv racuna je uspesno promenjen').should('be.visible');
   });
 
-  it('opens change limits dialog and saves new limits', () => {
+  it('opens change limits dialog and saves new limits via OTP verification', () => {
+    cy.intercept('POST', '**/api/payments/request-otp', {
+      statusCode: 200,
+      body: { sent: true, message: 'OTP sent' },
+    }).as('requestOtp');
     cy.intercept('PATCH', '**/api/accounts/1/limits', {
       statusCode: 200,
       body: {},
@@ -464,7 +471,13 @@ describe('Accounts - Account Details Page', () => {
     cy.contains('Promena limita').should('be.visible');
     cy.get('#dailyLimit').clear().type('600000');
     cy.get('#monthlyLimit').clear().type('3000000');
+    // Clicking "Sacuvaj limite" opens OTP verification modal
     cy.contains('button', 'Sacuvaj limite').click();
+    cy.wait('@requestOtp');
+    cy.contains('Verifikacija transakcije').should('be.visible');
+    // Enter OTP code and submit
+    cy.get('#otp').type('123456');
+    cy.contains('button', 'Potvrdi').click();
     cy.wait('@changeLimits');
     cy.contains('Limiti su uspesno sacuvani').should('be.visible');
   });
@@ -551,6 +564,11 @@ describe('Cards - Card List Page', () => {
       statusCode: 200,
       body: mockAccounts,
     }).as('getMyAccounts');
+    // Default cards intercept (individual tests may override with their own alias)
+    cy.intercept('GET', '**/api/cards', {
+      statusCode: 200,
+      body: [],
+    });
   });
 
   it('loads the card list page with header', () => {
@@ -607,13 +625,6 @@ describe('Cards - Card List Page', () => {
       statusCode: 200,
       body: {},
     }).as('blockCard');
-    // After block, reload with updated status
-    cy.intercept('GET', '**/api/cards', {
-      statusCode: 200,
-      body: mockCards.map((c) =>
-        c.id === 101 ? { ...c, status: 'BLOCKED' } : c
-      ),
-    }).as('getCardsAfterBlock');
 
     cy.visit('/cards', { onBeforeLoad: (win) => setupClientSession(win) });
     cy.wait('@getCards');
@@ -634,12 +645,6 @@ describe('Cards - Card List Page', () => {
       statusCode: 200,
       body: {},
     }).as('unblockCard');
-    cy.intercept('GET', '**/api/cards', {
-      statusCode: 200,
-      body: mockCards.map((c) =>
-        c.id === 102 ? { ...c, status: 'ACTIVE' } : c
-      ),
-    }).as('getCardsAfterUnblock');
 
     cy.visit('/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getCards');
@@ -671,12 +676,6 @@ describe('Cards - Card List Page', () => {
       statusCode: 200,
       body: {},
     }).as('deactivateCard');
-    cy.intercept('GET', '**/api/cards', {
-      statusCode: 200,
-      body: mockCards.map((c) =>
-        c.id === 101 ? { ...c, status: 'DEACTIVATED' } : c
-      ),
-    }).as('getCardsAfterDeactivate');
 
     cy.visit('/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getCards');
@@ -720,10 +719,10 @@ describe('Cards - Card List Page', () => {
     cy.contains('button', 'Nova kartica').click();
     cy.contains('Zahtev za novu karticu').should('be.visible');
 
-    // Select account from dropdown
+    // Select account from dropdown — pick account 2 (Devizni EUR)
+    // Account 1 already has 2 non-deactivated cards (max for personal), so pick account 2
     cy.contains('Izaberite racun').click();
-    // Pick the first active account
-    cy.get('[role="option"]').first().click();
+    cy.get('[role="option"]').contains('Devizni EUR').click();
 
     // Submit the form
     cy.contains('button', 'Kreiraj karticu').click();

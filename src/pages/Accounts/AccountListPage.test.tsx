@@ -136,7 +136,7 @@ describe('AccountListPage', () => {
     });
 
     // Look for the new account/open account button
-    const newAccBtn = screen.queryByText(/Otvori racun|Novi racun|Zahtev/i);
+    screen.queryByText(/Otvori racun|Novi racun|Zahtev/i);
     // May or may not exist depending on admin status, but page should render fine
     expect(screen.getAllByText(/Glavni racun/i).length).toBeGreaterThanOrEqual(1);
   });

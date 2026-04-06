@@ -268,12 +268,12 @@ describe('New Payment Page', () => {
 
     it('validates that amount within account limits allows submission', () => {
       setupCommonIntercepts();
-      cy.intercept('POST', '**/api/payments', { statusCode: 201, body: mockPaymentResult }).as('createPayment');
       cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } }).as('requestOtp');
 
       fillPaymentForm({ amount: '1000' });
       cy.contains('button', 'Nastavi na verifikaciju').click();
-      cy.wait('@createPayment');
+      // Valid form opens the OTP verification modal (no payment POST yet)
+      cy.contains('Verifikacija transakcije').should('be.visible');
     });
   });
 
@@ -290,9 +290,8 @@ describe('New Payment Page', () => {
     it('creates a payment successfully and opens verification modal', () => {
       fillPaymentForm();
       cy.contains('button', 'Nastavi na verifikaciju').click();
-      cy.wait('@createPayment');
 
-      // Verification modal should open
+      // The form submit now opens the OTP verification modal directly (no POST yet)
       cy.contains('Verifikacija transakcije').should('be.visible');
       cy.get('#otp').should('be.visible');
       cy.contains('Verifikacioni kod').should('be.visible');
@@ -308,10 +307,9 @@ describe('New Payment Page', () => {
       cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
       cy.wait('@getMyAccounts');
 
-      // Submit the form to open the verification modal
+      // Submit the form to open the verification modal (no POST /payments yet)
       fillPaymentForm();
       cy.contains('button', 'Nastavi na verifikaciju').click();
-      cy.wait('@createPayment');
       cy.wait('@requestOtp');
       cy.contains('Verifikacija transakcije').should('be.visible');
     });
@@ -323,62 +321,51 @@ describe('New Payment Page', () => {
     });
 
     it('successfully verifies with correct OTP code', () => {
-      cy.intercept('POST', '**/api/payments/verify', {
-        statusCode: 200,
-        body: { verified: true, message: 'OK' },
-      }).as('verifyPayment');
+      // When user enters OTP and clicks Potvrdi, the modal calls onVerified(code)
+      // which triggers POST /payments with the OTP code
       cy.intercept('POST', '**/api/payment-recipients', { statusCode: 201, body: { id: 99 } }).as('saveRecipient');
 
       cy.get('#otp').type('123456');
       cy.contains('button', 'Potvrdi').click();
-      cy.wait('@verifyPayment');
-      cy.contains('uspešno verifikovana').should('be.visible');
+      cy.wait('@createPayment');
+      cy.contains('uspesno').should('be.visible');
     });
 
     it('shows error message for wrong OTP code', () => {
-      cy.intercept('POST', '**/api/payments/verify', {
-        statusCode: 200,
-        body: { verified: false, blocked: false, message: 'Kod nije validan. Pokušajte ponovo.' },
-      }).as('verifyPayment');
+      // Override createPayment to fail (simulating wrong OTP rejection from backend)
+      cy.intercept('POST', '**/api/payments', {
+        statusCode: 400,
+        body: { message: 'Kod nije validan. Pokušajte ponovo.' },
+      }).as('failedPayment');
 
       cy.get('#otp').type('000000');
       cy.contains('button', 'Potvrdi').click();
-      cy.wait('@verifyPayment');
+      cy.wait('@failedPayment');
       cy.contains('Kod nije validan').should('be.visible');
     });
 
     it('blocks transaction after 3 failed OTP attempts', () => {
-      let attempts = 0;
-      cy.intercept('POST', '**/api/payments/verify', (req) => {
-        attempts++;
-        if (attempts >= 3) {
-          req.reply({
-            statusCode: 200,
-            body: { verified: false, blocked: true, message: 'Maksimalan broj pokušaja je dostignut.' },
-          });
-        } else {
-          req.reply({
-            statusCode: 200,
-            body: { verified: false, blocked: false, message: 'Kod nije validan.' },
-          });
-        }
-      }).as('verifyPayment');
+      // Override createPayment to always fail
+      cy.intercept('POST', '**/api/payments', {
+        statusCode: 400,
+        body: { message: 'Kod nije validan.' },
+      }).as('failedPayment');
 
       // Attempt 1
       cy.get('#otp').type('111111');
       cy.contains('button', 'Potvrdi').click();
-      cy.wait('@verifyPayment');
+      cy.wait('@failedPayment');
       cy.contains('Kod nije validan').should('be.visible');
 
       // Attempt 2
       cy.get('#otp').clear().type('222222');
       cy.contains('button', 'Potvrdi').click();
-      cy.wait('@verifyPayment');
+      cy.wait('@failedPayment');
 
-      // Attempt 3 - should block
+      // Attempt 3 - should block (attemptsLeft reaches 0)
       cy.get('#otp').clear().type('333333');
       cy.contains('button', 'Potvrdi').click();
-      cy.wait('@verifyPayment');
+      cy.wait('@failedPayment');
       cy.contains('Maksimalan broj').should('be.visible');
     });
 
@@ -392,10 +379,6 @@ describe('New Payment Page', () => {
   describe('Cross-currency payment', () => {
     beforeEach(() => {
       setupCommonIntercepts();
-      cy.intercept('POST', '**/api/payments', {
-        statusCode: 201,
-        body: { ...mockPaymentResult, currency: 'EUR' },
-      }).as('createFxPayment');
       cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } }).as('requestOtp');
       cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
       cy.wait('@getMyAccounts');
@@ -414,7 +397,7 @@ describe('New Payment Page', () => {
     it('submits a cross-currency payment from EUR account', () => {
       fillPaymentForm({ fromAccount: mockAccounts[1].accountNumber, amount: '100', purpose: 'FX placanje' });
       cy.contains('button', 'Nastavi na verifikaciju').click();
-      cy.wait('@createFxPayment');
+      // Form submit opens OTP modal (no POST /payments yet)
       cy.contains('Verifikacija transakcije').should('be.visible');
     });
   });
@@ -423,6 +406,7 @@ describe('New Payment Page', () => {
   describe('Payment failure scenarios', () => {
     beforeEach(() => {
       setupCommonIntercepts();
+      cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } }).as('requestOtp');
       cy.visit('/payments/new', { onBeforeLoad: (win) => setupClientSession(win) });
       cy.wait('@getMyAccounts');
     });
@@ -435,6 +419,10 @@ describe('New Payment Page', () => {
 
       fillPaymentForm({ amount: '999999' });
       cy.contains('button', 'Nastavi na verifikaciju').click();
+      // OTP modal opens, enter code to trigger the actual payment
+      cy.wait('@requestOtp');
+      cy.get('#otp').type('123456');
+      cy.contains('button', 'Potvrdi').click();
       cy.wait('@failedPayment');
       cy.contains('Nedovoljno sredstava').should('be.visible');
     });
@@ -447,6 +435,10 @@ describe('New Payment Page', () => {
 
       fillPaymentForm({ toAccount: '999999999999999999' });
       cy.contains('button', 'Nastavi na verifikaciju').click();
+      // OTP modal opens, enter code to trigger the actual payment
+      cy.wait('@requestOtp');
+      cy.get('#otp').type('123456');
+      cy.contains('button', 'Potvrdi').click();
       cy.wait('@notFoundPayment');
       cy.contains('ne postoji').should('be.visible');
     });

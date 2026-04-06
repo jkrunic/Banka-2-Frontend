@@ -211,7 +211,7 @@ describe('Portfolio page', () => {
       .parents('tr')
       .within(() => {
         cy.get('input[type="number"]').clear().type('7');
-        cy.contains('button', 'Ucini javnim').click();
+        cy.contains('button', 'Učini javnim').click();
       });
 
     cy.wait('@setPublic');
@@ -221,7 +221,7 @@ describe('Portfolio page', () => {
       .parents('tr')
       .within(() => {
         cy.get('input[type="number"]').should('not.exist');
-        cy.contains('button', 'Ucini javnim').should('not.exist');
+        cy.contains('button', 'Učini javnim').should('not.exist');
       });
 
     // FUTURES row should NOT have public quantity input
@@ -806,7 +806,7 @@ describe('Margin accounts page', () => {
 
     // Click deposit on the first (active) account
     cy.contains('MRG-00001')
-      .parents('[class*="Card"]')
+      .parents('[class*="rounded"]')
       .first()
       .within(() => {
         cy.contains('button', 'Uplati').click();

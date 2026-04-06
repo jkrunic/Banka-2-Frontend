@@ -198,7 +198,6 @@ describe('EmployeeCreatePage', () => {
 
   it('shows loading state during submission', async () => {
     mockCreate.mockImplementation(() => new Promise(() => {}));
-    const user = userEvent.setup();
     renderWithProviders(<EmployeeCreatePage />);
 
     // The loading state shows "Kreiranje..." text

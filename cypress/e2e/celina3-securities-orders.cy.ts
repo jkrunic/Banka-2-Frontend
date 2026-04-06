@@ -555,7 +555,7 @@ describe('Celina 3 - Create Order Page', () => {
       }).as('getAccountsAll');
     }
 
-    cy.intercept('GET', '**/exchange-management/acronym/**', {
+    cy.intercept('GET', '**/exchanges/**', {
       statusCode: 200,
       body: { id: 1, name: 'NASDAQ', acronym: 'NASDAQ', isOpen: true },
     }).as('getExchange');
@@ -675,7 +675,7 @@ describe('Celina 3 - Create Order Page', () => {
     }).as('getAccountsAll');
 
     // Return exchange as closed
-    cy.intercept('GET', '**/exchange-management/acronym/**', {
+    cy.intercept('GET', '**/exchanges/**', {
       statusCode: 200,
       body: { id: 1, name: 'NASDAQ', acronym: 'NASDAQ', isOpen: false },
     }).as('getExchangeClosed');
@@ -760,11 +760,10 @@ describe('Celina 3 - My Orders Page', () => {
     setupMyOrdersPage();
     cy.contains('h1', 'Moji nalozi').should('be.visible');
     cy.contains('Pregled svih vasih BUY i SELL naloga').should('be.visible');
-    // Stats cards
-    cy.contains('Ukupno na strani').should('be.visible');
-    cy.contains('Na cekanju').should('be.visible');
-    cy.contains('Odobreni').should('be.visible');
-    cy.contains('Zavrseni').should('be.visible');
+    // Filter buttons showing status counts
+    cy.contains('button', 'Na cekanju').should('be.visible');
+    cy.contains('button', 'Odobreni').should('be.visible');
+    cy.contains('button', 'Zavrseni').should('be.visible');
   });
 
   it('displays status badges with correct variants for each order', () => {

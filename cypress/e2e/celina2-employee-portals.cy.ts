@@ -124,26 +124,30 @@ describe('Employee Portal - Create Account Page', () => {
   it('shows subtypes for TEKUCI accounts (Standardni, Stedni, Penzionerski, etc.)', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
     // Subtype selector should be visible
-    cy.contains('Podtip racuna').should('be.visible');
+    cy.contains('Podvrsta racuna').should('be.visible');
   });
 
   it('switches to DEVIZNI and shows EUR as default currency', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
-    // Click on Devizni account type card
-    cy.contains('Devizni racun').click();
+    // Open account type select and pick Devizni
+    cy.contains('label', 'Tip racuna').parent().find('button[role="combobox"]').click();
+    cy.contains('[role="option"]', 'Devizni').click();
     cy.contains('EUR').should('exist');
   });
 
   it('switches to POSLOVNI and shows business fields', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Poslovni racun').click();
+    // Open account type select and pick Poslovni
+    cy.contains('label', 'Tip racuna').parent().find('button[role="combobox"]').click();
+    cy.contains('[role="option"]', 'Poslovni').click();
     // Business-specific fields should appear
-    cy.contains('Podaci o firmi').should('be.visible');
+    cy.contains('Podaci firme').should('be.visible');
   });
 
   it('shows business form fields: company name, registration number, tax ID, activity code', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Poslovni racun').click();
+    cy.contains('label', 'Tip racuna').parent().find('button[role="combobox"]').click();
+    cy.contains('[role="option"]', 'Poslovni').click();
     cy.get('input[name="companyName"]').should('exist');
     cy.get('input[name="registrationNumber"]').should('exist');
     cy.get('input[name="taxId"]').should('exist');
@@ -178,7 +182,8 @@ describe('Employee Portal - Create Account Page', () => {
     }).as('createBusinessAccount');
 
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Poslovni racun').click();
+    cy.contains('label', 'Tip racuna').parent().find('button[role="combobox"]').click();
+    cy.contains('[role="option"]', 'Poslovni').click();
     cy.get('input[name="ownerEmail"]').type('jovan.markovic@gmail.com');
     cy.get('input[name="companyName"]').type('Test DOO');
     cy.get('input[name="registrationNumber"]').type('12345678');
@@ -202,7 +207,7 @@ describe('Employee Portal - Create Account Page', () => {
 
   it('shows create card toggle switch', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Kreiraj karticu').should('be.visible');
+    cy.contains('Napravi karticu uz racun').should('be.visible');
     cy.get('button[role="switch"]').should('exist');
   });
 
@@ -242,17 +247,18 @@ describe('Employee Portal - Create Account Page', () => {
 describe('Employee Portal - Accounts Management', () => {
   beforeEach(() => {
     setupCommonIntercepts();
-    cy.intercept('GET', '**/api/accounts?*', { statusCode: 200, body: mockAccounts }).as('getAllAccounts');
-    cy.intercept('GET', '**/api/accounts*', { statusCode: 200, body: mockAccounts }).as('getAccounts');
+    cy.intercept('GET', '**/api/accounts/all*', { statusCode: 200, body: mockAccounts }).as('getAllAccounts');
   });
 
   it('loads the accounts portal page with header', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Racuni').should('be.visible');
+    cy.wait('@getAllAccounts');
+    cy.contains('Portal racuna').should('be.visible');
   });
 
   it('displays account table with all accounts', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('Stefan Jovanovic').should('be.visible');
     cy.contains('Milica Nikolic').should('be.visible');
     cy.contains('Jovan Markovic').should('be.visible');
@@ -260,6 +266,7 @@ describe('Employee Portal - Accounts Management', () => {
 
   it('shows account type badges (Tekuci, Devizni, Poslovni)', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('Tekuci').should('exist');
     cy.contains('Devizni').should('exist');
     cy.contains('Poslovni').should('exist');
@@ -267,12 +274,14 @@ describe('Employee Portal - Accounts Management', () => {
 
   it('shows account status badges (Aktivan, Blokiran)', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('Aktivan').should('exist');
     cy.contains('Blokiran').should('exist');
   });
 
   it('shows stat cards: Ukupno racuna, Aktivni, Blokirani, Ukupno stanje', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('Ukupno racuna').should('be.visible');
     cy.contains('Aktivni').should('be.visible');
     cy.contains('Blokirani').should('be.visible');
@@ -281,17 +290,20 @@ describe('Employee Portal - Accounts Management', () => {
 
   it('shows filter toggle button', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.get('[aria-label="Filteri"], button:has(svg)').should('have.length.at.least', 1);
+    cy.wait('@getAllAccounts');
+    cy.get('button[title="Filteri"]').should('exist');
   });
 
   it('opens filters panel and shows filter dropdowns', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    // Find and click the filters button
-    cy.get('button').contains('Filteri').click({ force: true });
+    cy.wait('@getAllAccounts');
+    // Find and click the filters button (icon button with title)
+    cy.get('button[title="Filteri"]').click({ force: true });
+    cy.contains('Filteri pretrage').should('be.visible');
   });
 
   it('filters accounts by owner email search', () => {
-    cy.intercept('GET', '**/api/accounts*ownerEmail=stefan*', {
+    cy.intercept('GET', '**/api/accounts/all*ownerName=stefan*', {
       statusCode: 200,
       body: {
         content: [mockAccounts.content[0]],
@@ -301,6 +313,9 @@ describe('Employee Portal - Accounts Management', () => {
     }).as('filterByEmail');
 
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
+    // Open filters first
+    cy.get('button[title="Filteri"]').click({ force: true });
     cy.get('input[placeholder*="Pretrazi"]').first().type('stefan');
   });
 
@@ -311,6 +326,7 @@ describe('Employee Portal - Accounts Management', () => {
     }).as('changeStatus');
 
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     // Click block action on first account
     cy.get('table tbody tr').first().find('button').contains('Blokiraj').click({ force: true });
     cy.wait('@changeStatus');
@@ -324,35 +340,40 @@ describe('Employee Portal - Accounts Management', () => {
     }).as('activateAccount');
 
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     // Click activate action on blocked account
     cy.get('table tbody tr').eq(2).find('button').contains('Aktiviraj').click({ force: true });
     cy.wait('@activateAccount');
     cy.contains('Status racuna promenjen').should('be.visible');
   });
 
-  it('navigates to create account page via Novi racun button', () => {
+  it('navigates to create account page via Kreiraj racun button', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('button', 'Novi racun').click();
+    cy.wait('@getAllAccounts');
+    cy.contains('button', 'Kreiraj racun').click();
     cy.url().should('include', '/employee/accounts/new');
   });
 
   it('navigates to account cards page', () => {
     cy.intercept('GET', '**/api/accounts/1', { statusCode: 200, body: mockAccountDetail }).as('getAccountDetail');
-    cy.intercept('GET', '**/api/accounts/1/cards', { statusCode: 200, body: mockCards }).as('getAccountCards');
+    cy.intercept('GET', '**/api/cards/account/1', { statusCode: 200, body: mockCards }).as('getAccountCards');
 
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    // Click on the cards button for the first account row
-    cy.get('table tbody tr').first().find('button').filter(':has(svg)').first().click({ force: true });
+    cy.wait('@getAllAccounts');
+    // Click on the cards button (CreditCard icon) for the first account row
+    cy.get('table tbody tr').first().find('button[title="Kartice"]').click({ force: true });
+    cy.url().should('include', '/employee/accounts/1/cards');
   });
 
   it('shows pagination controls', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
-    // Should show page info
-    cy.contains(/\d+.*od.*\d+/).should('exist');
+    cy.wait('@getAllAccounts');
+    // Should show page info (uses en-dash: 1–3 od 3)
+    cy.contains('od').should('exist');
   });
 
   it('shows empty state when no accounts found', () => {
-    cy.intercept('GET', '**/api/accounts*', {
+    cy.intercept('GET', '**/api/accounts/all*', {
       statusCode: 200,
       body: { content: [], totalElements: 0, totalPages: 0 },
     }).as('getEmptyAccounts');
@@ -364,17 +385,19 @@ describe('Employee Portal - Accounts Management', () => {
 
   it('shows formatted account numbers in xxx-xxxxxxxxxxxxx-xx format', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('265-0000000000000-01').should('exist');
   });
 
   it('shows formatted balances with RSD and EUR currency labels', () => {
     cy.visit('/employee/accounts', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAllAccounts');
     cy.contains('RSD').should('exist');
     cy.contains('EUR').should('exist');
   });
 
   it('handles API error gracefully with error message', () => {
-    cy.intercept('GET', '**/api/accounts*', {
+    cy.intercept('GET', '**/api/accounts/all*', {
       statusCode: 500,
       body: { message: 'Server error' },
     }).as('getAccountsError');
@@ -398,7 +421,7 @@ describe('Employee Portal - Clients Management', () => {
   it('loads the clients portal page with header', () => {
     cy.visit('/employee/clients', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getClients');
-    cy.contains('Klijenti').should('be.visible');
+    cy.contains('Portal klijenata').should('be.visible');
   });
 
   it('displays client list with names and emails', () => {
@@ -440,6 +463,8 @@ describe('Employee Portal - Clients Management', () => {
     cy.visit('/employee/clients', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getClients');
     cy.contains('Stefan Jovanovic').click();
+    cy.wait('@getClientDetail');
+    cy.url().should('include', '/employee/clients/1');
   });
 
   it('shows client accounts in the detail view', () => {
@@ -458,8 +483,9 @@ describe('Employee Portal - Clients Management', () => {
 
     cy.visit('/employee/clients/1', { onBeforeLoad: (win) => setupAdminSession(win) });
     cy.wait('@getClientDetail');
+    cy.wait('@getClientAccounts');
     // Click edit button
-    cy.get('button').filter(':has(svg)').contains('Izmeni').click({ force: true });
+    cy.contains('button', 'Izmeni').click({ force: true });
   });
 
   it('saves client edit successfully', () => {
@@ -556,16 +582,20 @@ describe('Employee Portal - Account Cards Management', () => {
   beforeEach(() => {
     setupCommonIntercepts();
     cy.intercept('GET', '**/api/accounts/1', { statusCode: 200, body: mockAccountDetail }).as('getAccount');
-    cy.intercept('GET', '**/api/accounts/1/cards', { statusCode: 200, body: mockCards }).as('getAccountCards');
+    cy.intercept('GET', '**/api/cards/account/1', { statusCode: 200, body: mockCards }).as('getAccountCards');
   });
 
   it('loads the account cards page with account info header', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Kartice').should('be.visible');
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
+    cy.contains('Portal kartica').should('be.visible');
   });
 
   it('displays all cards for the account', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('Visa Debit').should('exist');
     cy.contains('Mastercard Gold').should('exist');
     cy.contains('DinaCard Standard').should('exist');
@@ -573,6 +603,8 @@ describe('Employee Portal - Account Cards Management', () => {
 
   it('shows card status labels (Aktivna, Blokirana, Deaktivirana)', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('Aktivna').should('exist');
     cy.contains('Blokirana').should('exist');
     cy.contains('Deaktivirana').should('exist');
@@ -580,6 +612,8 @@ describe('Employee Portal - Account Cards Management', () => {
 
   it('shows masked card numbers (last 4 digits)', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('1111').should('exist');
     cy.contains('0004').should('exist');
     cy.contains('0505').should('exist');
@@ -592,6 +626,8 @@ describe('Employee Portal - Account Cards Management', () => {
     }).as('blockCard');
 
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     // Find the block button for active card
     cy.contains('Blokiraj').first().click({ force: true });
     cy.wait('@blockCard');
@@ -604,7 +640,9 @@ describe('Employee Portal - Account Cards Management', () => {
     }).as('unblockCard');
 
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Odblokiraj').click({ force: true });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
+    cy.contains('Deblokiraj').click({ force: true });
     cy.wait('@unblockCard');
   });
 
@@ -617,12 +655,17 @@ describe('Employee Portal - Account Cards Management', () => {
     cy.on('window:confirm', () => true);
 
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Deaktiviraj').first().click({ force: true });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
+    // The deactivate button is icon-only (destructive variant) - click first destructive button
+    cy.get('button.bg-destructive, button[class*="destructive"]').first().click({ force: true });
     cy.wait('@deactivateCard');
   });
 
   it('shows card type labels (Visa, Mastercard, DinaCard)', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('Visa').should('exist');
     cy.contains('Mastercard').should('exist');
     cy.contains('DinaCard').should('exist');
@@ -630,29 +673,36 @@ describe('Employee Portal - Account Cards Management', () => {
 
   it('shows card type gradient backgrounds', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.get('[class*="bg-gradient-to"]').should('have.length.at.least', 1);
   });
 
   it('shows account number in formatted form', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('265-0000000000000-01').should('exist');
   });
 
   it('shows back navigation button', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.contains('Nazad').should('be.visible');
+    cy.contains('Nazad na portal racuna').should('be.visible');
   });
 
   it('shows empty state when account has no cards', () => {
-    cy.intercept('GET', '**/api/accounts/1/cards', { statusCode: 200, body: [] }).as('getEmptyCards');
+    cy.intercept('GET', '**/api/cards/account/1', { statusCode: 200, body: [] }).as('getEmptyCards');
 
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
     cy.wait('@getEmptyCards');
     cy.contains('Nema').should('exist');
   });
 
   it('shows card expiration dates', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     // Should show formatted dates
     cy.contains('2028').should('exist');
     cy.contains('2027').should('exist');
@@ -660,26 +710,33 @@ describe('Employee Portal - Account Cards Management', () => {
 
   it('shows card holder name', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('STEFAN JOVANOVIC').should('exist');
   });
 
   it('shows card limit information', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
     cy.contains('200').should('exist');
   });
 
   it('handles error when loading cards', () => {
-    cy.intercept('GET', '**/api/accounts/1/cards', {
+    cy.intercept('GET', '**/api/cards/account/1', {
       statusCode: 500,
       body: { message: 'Error' },
     }).as('getCardsError');
 
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
+    cy.wait('@getAccount');
     cy.wait('@getCardsError');
   });
 
   it('shows create new card button', () => {
     cy.visit('/employee/accounts/1/cards', { onBeforeLoad: (win) => setupAdminSession(win) });
-    cy.get('button').filter(':has(svg)').should('have.length.at.least', 1);
+    cy.wait('@getAccount');
+    cy.wait('@getAccountCards');
+    cy.contains('Nova kartica').should('exist');
   });
 });

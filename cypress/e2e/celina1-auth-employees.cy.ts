@@ -187,8 +187,8 @@ describe('Celina 1 - Auth flows', () => {
   // ---- Wrong password server error ----
   it('Pogresna lozinka prikazuje server gresku', () => {
     cy.intercept('POST', '**/api/auth/login', {
-      statusCode: 401,
-      body: { message: 'Pogrešan email ili lozinka.' },
+      statusCode: 400,
+      body: { message: 'Pogresan email ili lozinka.' },
     }).as('loginFail');
 
     cy.visit('/login');
@@ -198,7 +198,7 @@ describe('Celina 1 - Auth flows', () => {
     cy.contains('Prijavi se').click();
 
     cy.wait('@loginFail');
-    cy.contains('Pogrešan email ili lozinka').should('be.visible');
+    cy.contains('Pogresan email ili lozinka').should('be.visible');
   });
 
   // ---- Successful client login ----
@@ -618,7 +618,7 @@ describe('Celina 1 - Employee CRUD', () => {
     });
 
     it('Create forma renderuje sve sekcije i polja', () => {
-      cy.contains('Lični podaci').should('be.visible');
+      cy.contains('Licni podaci').should('be.visible');
       cy.contains('Kontakt').should('be.visible');
       cy.contains('Posao').should('be.visible');
 
@@ -663,7 +663,7 @@ describe('Celina 1 - Employee CRUD', () => {
       cy.get('#dateOfBirth').type('1995-05-15');
       // Gender select
       cy.contains('label', 'Pol').parent().find('button[role="combobox"]').click();
-      cy.contains('[role="option"]', 'Muški').click();
+      cy.contains('[role="option"]', 'Muski').click();
       cy.get('#email').type('novi@banka.rs');
       cy.get('#phoneNumber').type('+381601112233');
       cy.get('#address').type('Nemanjina 11, Beograd');
@@ -691,7 +691,7 @@ describe('Celina 1 - Employee CRUD', () => {
       cy.get('#lastName').type('Korisnik');
       cy.get('#dateOfBirth').type('1995-05-15');
       cy.contains('label', 'Pol').parent().find('button[role="combobox"]').click();
-      cy.contains('[role="option"]', 'Muški').click();
+      cy.contains('[role="option"]', 'Muski').click();
       cy.get('#email').type('elena@banka.rs');
       cy.get('#phoneNumber').type('+381601112233');
       cy.get('#address').type('Adresa 1');
@@ -713,7 +713,7 @@ describe('Celina 1 - Employee CRUD', () => {
         body: mockEmployeesPage(),
       });
 
-      cy.contains('Otkaži').click();
+      cy.contains('Otkazi').click();
       cy.url().should('include', '/admin/employees');
     });
   });
@@ -739,7 +739,7 @@ describe('Celina 1 - Employee CRUD', () => {
       cy.get('[data-testid="employee-edit-form"]').should('exist');
       cy.contains('Izmeni zaposlenog: Elena Kalajdzic').should('be.visible');
 
-      cy.contains('Lični podaci').should('be.visible');
+      cy.contains('Licni podaci').should('be.visible');
       cy.contains('Kontakt').should('be.visible');
       cy.contains('Posao').should('be.visible');
       cy.contains('Permisije').should('be.visible');
@@ -825,7 +825,7 @@ describe('Celina 1 - Employee CRUD', () => {
       cy.visit('/admin/employees/999', { onBeforeLoad: injectAdmin });
       cy.wait('@notFound');
 
-      cy.contains('Zaposleni nije pronađen').should('be.visible');
+      cy.contains('Zaposleni nije pronadjen').should('be.visible');
       cy.contains('Nazad na listu').should('be.visible');
     });
 

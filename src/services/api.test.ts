@@ -122,7 +122,7 @@ describe('api module', () => {
       });
 
       // Make the retry call succeed
-      (mockAxiosInstance as unknown as CallableFunction) || null;
+      void (mockAxiosInstance as unknown as CallableFunction);
       // Mock the api instance to be callable for retry
       const callableMock = Object.assign(vi.fn().mockResolvedValue({ data: 'retried' }), mockAxiosInstance);
 

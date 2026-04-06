@@ -289,9 +289,6 @@ export default function AccountDetailsPage() {
       toast.success('Limiti su uspesno sacuvani.');
       setShowVerification(false);
       setShowLimits(false);
-    } catch (err) {
-      // Re-throw so VerificationModal can handle it (decrement attempts, show error)
-      throw err;
     } finally {
       setIsSavingLimits(false);
     }

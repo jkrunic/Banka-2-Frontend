@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
@@ -67,25 +67,27 @@ vi.mock('./pages/Admin/EmployeeCreatePage', () => ({ default: () => <div>Employe
 vi.mock('./pages/Admin/EmployeeEditPage', () => ({ default: () => <div>EmployeeEditPage</div> }));
 
 // Mock layout components
-vi.mock('./components/layout/MainLayout', () => ({
-  default: () => {
-    const { Outlet } = require('react-router-dom');
-    return <div data-testid="main-layout"><Outlet /></div>;
-  },
-}));
+vi.mock('./components/layout/MainLayout', async () => {
+  const { Outlet } = await import('react-router-dom');
+  return {
+    default: () => <div data-testid="main-layout"><Outlet /></div>,
+  };
+});
 
 // Mock ProtectedRoute - controlled via mockIsAuthenticated / mockIsAdmin
 let mockIsAuthenticated = false;
 let mockIsAdmin = false;
 
-vi.mock('./components/layout/ProtectedRoute', () => ({
-  default: ({ adminOnly }: { adminOnly?: boolean }) => {
-    const { Navigate, Outlet } = require('react-router-dom');
-    if (!mockIsAuthenticated) return <Navigate to="/login" replace />;
-    if (adminOnly && !mockIsAdmin) return <Navigate to="/403" replace />;
-    return <Outlet />;
-  },
-}));
+vi.mock('./components/layout/ProtectedRoute', async () => {
+  const { Navigate, Outlet } = await import('react-router-dom');
+  return {
+    default: ({ adminOnly }: { adminOnly?: boolean }) => {
+      if (!mockIsAuthenticated) return <Navigate to="/login" replace />;
+      if (adminOnly && !mockIsAdmin) return <Navigate to="/403" replace />;
+      return <Outlet />;
+    },
+  };
+});
 
 function renderApp(route: string) {
   return render(

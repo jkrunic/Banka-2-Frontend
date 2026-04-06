@@ -235,8 +235,8 @@ describe('Transfer Page - Same Currency Transfer (no FX)', () => {
     // Confirm step: shows both account numbers
     cy.contains(mockAccounts[0].accountNumber).should('be.visible');
     cy.contains(mockAccounts[1].accountNumber).should('be.visible');
-    // Shows amount
-    cy.contains('Iznos prenosa').should('be.visible');
+    // Shows amount label
+    cy.contains('Iznos').should('be.visible');
     // Shows "same currency" indicator
     cy.contains('ista valuta').should('be.visible');
     // Has confirm and back buttons
@@ -245,11 +245,16 @@ describe('Transfer Page - Same Currency Transfer (no FX)', () => {
   });
 
   it('successfully creates a transfer on confirm', () => {
+    cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } }).as('requestOtp');
     cy.get('#fromAccount').select(mockAccounts[0].accountNumber);
     cy.get('#toAccount').select(mockAccounts[1].accountNumber);
     cy.get('#amount').clear().type('10000');
     cy.contains('button', 'Nastavi na potvrdu').click();
     cy.contains('button', 'Potvrdi transfer').click();
+    // OTP modal opens
+    cy.wait('@requestOtp');
+    cy.get('#otp').type('123456');
+    cy.contains('button', 'Potvrdi').click();
     cy.wait('@createTransfer');
     // Should show success toast or navigate away
     cy.url().should('include', '/accounts');
@@ -287,8 +292,9 @@ describe('Transfer Page - Different Currency (FX) Transfer', () => {
     cy.get('#toAccount').select(mockAccounts[2].accountNumber); // EUR
     cy.get('#amount').clear().type('50000');
     cy.wait('@exchangeCalc');
-    // FX preview card should appear
-    cy.contains('Konverzija valuta').should('be.visible');
+    // FX preview card should appear with exchange rate info
+    cy.contains('Kurs').should('be.visible');
+    cy.contains('Konvertovani iznos').should('be.visible');
   });
 
   it('displays exchange rate in the FX preview', () => {
@@ -317,7 +323,7 @@ describe('Transfer Page - Different Currency (FX) Transfer', () => {
     cy.get('#toAccount').select(mockAccounts[2].accountNumber);
     cy.get('#amount').clear().type('50000');
     cy.wait('@exchangeCalc');
-    cy.contains('Ukupno zaducenje').should('be.visible');
+    cy.contains('Ukupno za terecenje').should('be.visible');
   });
 
   it('shows FX details in confirm step', () => {
@@ -327,9 +333,9 @@ describe('Transfer Page - Different Currency (FX) Transfer', () => {
     cy.wait('@exchangeCalc');
     cy.contains('button', 'Nastavi na potvrdu').click();
     // Confirm step shows conversion details
-    cy.contains('Konvertovano').should('be.visible');
+    cy.contains('Konvertovani iznos').should('be.visible');
     cy.contains('Provizija (0.5%)').should('be.visible');
-    cy.contains('Ukupno zaducenje').should('be.visible');
+    cy.contains('Ukupno za terecenje').should('be.visible');
     cy.contains('button', 'Potvrdi transfer').should('be.visible');
   });
 });
@@ -494,12 +500,12 @@ describe('Exchange Page - Rate Table Rendering', () => {
   });
 
   it('displays actual rate values from the API', () => {
-    // EUR middleRate is 117.25 -> formatted as 117.2500
-    cy.contains('117.2500').should('be.visible');
-    // EUR buyRate is 116.50 -> formatted as 116.5000
-    cy.contains('116.5000').should('be.visible');
-    // EUR sellRate is 118.00 -> formatted as 118.0000
-    cy.contains('118.0000').should('be.visible');
+    // EUR middleRate is 117.25 -> formatted with sr-RS locale as 117,2500
+    cy.contains('117,2500').should('be.visible');
+    // EUR buyRate is 116.50 -> formatted as 116,5000
+    cy.contains('116,5000').should('be.visible');
+    // EUR sellRate is 118.00 -> formatted as 118,0000
+    cy.contains('118,0000').should('be.visible');
   });
 
   it('shows currency full names', () => {
@@ -508,10 +514,11 @@ describe('Exchange Page - Rate Table Rendering', () => {
     cy.contains('Svajcarski franak').should('be.visible');
   });
 
-  it('shows empty rates message when no rates available', () => {
-    cy.intercept('GET', '**/api/exchange-rates', { statusCode: 200, body: [] }).as('emptyRates');
+  it('shows empty rates message when API fails', () => {
+    // When the API fails, rates are set to [] (empty), showing the empty state
+    cy.intercept('GET', '**/api/exchange-rates', { statusCode: 500, body: { message: 'Server error' } }).as('failedRates');
     cy.visit('/exchange', { onBeforeLoad: (win) => setupClientSession(win) });
-    cy.wait('@emptyRates');
+    cy.wait('@failedRates');
     cy.contains('Nema dostupnih kurseva').should('be.visible');
   });
 
@@ -560,16 +567,16 @@ describe('Exchange Page - Conversion Calculator', () => {
     cy.wait('@calculateExchange');
     // Result should show converted amount
     cy.contains('Rezultat konverzije').should('be.visible');
-    cy.contains('117.25').should('be.visible');
+    // Exchange rate 117.25 is formatted with sr-RS locale in the rate info
+    cy.contains('117,2500').should('be.visible');
   });
 
   it('prevents same currency conversion and disables button', () => {
     // Select same currency for both from and to
-    // Click EUR for fromCurrency (already default)
-    // Try to click EUR for toCurrency - but it should be disabled/dimmed
-    // The page shows a warning message
-    cy.get('input[name="fromCurrency"][value="EUR"]').check({ force: true });
-    cy.get('input[name="toCurrency"][value="EUR"]').check({ force: true });
+    // Default: fromCurrency=EUR, toCurrency=RSD
+    // Set fromCurrency to RSD to match toCurrency
+    cy.get('input[name="fromCurrency"][value="RSD"]').check({ force: true });
+    // Now both are RSD - warning should appear
     cy.contains('Izvorna i ciljna valuta ne mogu biti iste').should('be.visible');
     // The convert button should be disabled
     cy.contains('button', 'Konvertuj').should('be.disabled');

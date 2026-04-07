@@ -495,7 +495,7 @@ describe('Celina 3 - Securities Details Page', () => {
       cy.get('[class*="bg-emerald"]').should('exist');
       cy.get('tr').then(($rows) => {
         const hasRed = $rows.toArray().some(row => row.className.includes('bg-red'));
-        expect(hasRed).to.be.true;
+        expect(hasRed).to.equal(true);
       });
     });
 

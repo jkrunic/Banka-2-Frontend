@@ -16,6 +16,7 @@ import {
   Zap,
   ArrowUpRight,
   ArrowDownRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import type { Listing, PaginatedResponse } from '@/types/celina3';
@@ -125,19 +126,55 @@ export default function SecuritiesListPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Advanced filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [exchangePrefix, setExchangePrefix] = useState('');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [settlementDateFrom, setSettlementDateFrom] = useState('');
+  const [settlementDateTo, setSettlementDateTo] = useState('');
+  const [debouncedFilters, setDebouncedFilters] = useState({
+    exchangePrefix: '',
+    priceMin: '',
+    priceMax: '',
+    settlementDateFrom: '',
+    settlementDateTo: '',
+  });
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Reset page on tab/search change
-  useEffect(() => { setPage(0); }, [activeTab, debouncedSearch]);
+  // Debounce advanced filters
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedFilters({
+      exchangePrefix, priceMin, priceMax, settlementDateFrom, settlementDateTo,
+    }), 300);
+    return () => clearTimeout(timer);
+  }, [exchangePrefix, priceMin, priceMax, settlementDateFrom, settlementDateTo]);
+
+  // Reset page on tab/search/filter change
+  useEffect(() => { setPage(0); }, [activeTab, debouncedSearch, debouncedFilters]);
+
+  // Price range validation
+  const priceRangeError = debouncedFilters.priceMin && debouncedFilters.priceMax
+    && Number(debouncedFilters.priceMin) > Number(debouncedFilters.priceMax);
 
   const fetchData = useCallback(async () => {
+    if (priceRangeError) return;
     setLoading(true);
     try {
-      const result = await listingService.getAll(activeTab, debouncedSearch, page, PAGE_SIZE);
+      const filters: Record<string, string | number> = {};
+      if (debouncedFilters.exchangePrefix) filters.exchangePrefix = debouncedFilters.exchangePrefix;
+      if (debouncedFilters.priceMin) filters.priceMin = Number(debouncedFilters.priceMin);
+      if (debouncedFilters.priceMax) filters.priceMax = Number(debouncedFilters.priceMax);
+      if (debouncedFilters.settlementDateFrom) filters.settlementDateFrom = debouncedFilters.settlementDateFrom;
+      if (debouncedFilters.settlementDateTo) filters.settlementDateTo = debouncedFilters.settlementDateTo;
+
+      const result = await listingService.getAll(activeTab, debouncedSearch, page, PAGE_SIZE,
+        Object.keys(filters).length > 0 ? filters as Parameters<typeof listingService.getAll>[4] : undefined);
       setData(result);
     } catch {
       toast.error('Greska pri ucitavanju hartija od vrednosti');
@@ -145,7 +182,7 @@ export default function SecuritiesListPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, debouncedSearch, page]);
+  }, [activeTab, debouncedSearch, debouncedFilters, page, priceRangeError]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -198,16 +235,27 @@ export default function SecuritiesListPage() {
             </p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Osvezi cene
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showFilters ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowFilters(f => !f)}
+            className="gap-2"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filteri
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Osvezi cene
+          </Button>
+        </div>
       </div>
 
       {/* Market Overview Cards */}
@@ -320,6 +368,80 @@ export default function SecuritiesListPage() {
           />
         </div>
       </div>
+
+      {/* Advanced Filters */}
+      {showFilters && (
+        <Card className="border-border/50 shadow-sm p-4">
+          <h3 className="mb-3 text-sm font-medium text-muted-foreground">Napredni filteri</h3>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Exchange prefiks</label>
+              <Input
+                placeholder="npr. NY, NAS..."
+                value={exchangePrefix}
+                onChange={(e) => setExchangePrefix(e.target.value)}
+                className="w-[160px]"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Min cena</label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="0"
+                value={priceMin}
+                onChange={(e) => setPriceMin(e.target.value)}
+                className="w-[120px]"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Max cena</label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="∞"
+                value={priceMax}
+                onChange={(e) => setPriceMax(e.target.value)}
+                className="w-[120px]"
+              />
+            </div>
+            {activeTab === 'FUTURES' && (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Datum isteka od</label>
+                  <Input
+                    type="date"
+                    value={settlementDateFrom}
+                    onChange={(e) => setSettlementDateFrom(e.target.value)}
+                    className="w-[160px]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Datum isteka do</label>
+                  <Input
+                    type="date"
+                    value={settlementDateTo}
+                    onChange={(e) => setSettlementDateTo(e.target.value)}
+                    className="w-[160px]"
+                  />
+                </div>
+              </>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => {
+              setExchangePrefix('');
+              setPriceMin('');
+              setPriceMax('');
+              setSettlementDateFrom('');
+              setSettlementDateTo('');
+            }}>
+              Ocisti filtere
+            </Button>
+          </div>
+          {priceRangeError && (
+            <p className="mt-2 text-sm text-destructive">Minimalna cena ne moze biti veca od maksimalne.</p>
+          )}
+        </Card>
+      )}
 
       {/* Trading Table */}
       <Card className="border-border/50 shadow-sm overflow-hidden">

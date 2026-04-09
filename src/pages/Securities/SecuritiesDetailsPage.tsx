@@ -804,7 +804,14 @@ export default function SecuritiesDetailsPage() {
                     ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30'
                     : 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/20 hover:shadow-red-500/30'
                 }`}
-                onClick={() => navigate(`/orders/new?listingId=${listing.id}&direction=${orderDirection}`)}
+                onClick={() => {
+                  const qty = parseInt(orderQuantity);
+                  if (!Number.isFinite(qty) || qty < 1) {
+                    toast.error('Kolicina mora biti najmanje 1.');
+                    return;
+                  }
+                  navigate(`/orders/new?listingId=${listing.id}&direction=${orderDirection}`);
+                }}
               >
                 {orderDirection === 'BUY' ? (
                   <><TrendingUp className="h-4 w-4 mr-2" /> Kupi {listing.ticker}</>

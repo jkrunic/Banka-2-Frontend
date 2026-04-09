@@ -321,14 +321,14 @@ describe('Live: Upravljanje zaposlenima', () => {
   it('Klik na zaposlenog u tabeli otvara edit stranicu', () => {
     cy.visit('/admin/employees');
     cy.wait(5000);
-    // Table rows are directly clickable (cursor-pointer)
-    cy.get('table tbody tr').not('.opacity-60').first().click({ force: true });
+    // Click on a non-admin employee (rows with "Zaposleni" badge are editable)
+    cy.get('table tbody tr').not('.opacity-60').contains('Zaposleni').first().closest('tr').click({ force: true });
   });
 
   it('Edit stranica prikazuje formu sa podacima', () => {
     cy.visit('/admin/employees');
     cy.wait(5000);
-    cy.get('table tbody tr').not('.opacity-60').first().click({ force: true });
+    cy.get('table tbody tr').not('.opacity-60').contains('Zaposleni').first().closest('tr').click({ force: true });
     cy.wait(3000);
     cy.get('#firstName').should('not.have.value', '');
   });
@@ -940,7 +940,7 @@ describe('Live: Employee Edit detalji', () => {
   it('Edit prikazuje permisije', () => {
     cy.visit('/admin/employees');
     cy.wait(5000);
-    cy.get('table tbody tr').not('.opacity-60').first().click({ force: true });
+    cy.get('table tbody tr').not('.opacity-60').contains('Zaposleni').first().closest('tr').click({ force: true });
     cy.wait(3000);
     cy.get('[id^="perm-"]', { timeout: 10000 }).should('have.length.greaterThan', 0);
   });
@@ -955,7 +955,7 @@ describe('Live: Employee Edit detalji', () => {
   it('Edit navigacija nazad', () => {
     cy.visit('/admin/employees');
     cy.wait(5000);
-    cy.get('table tbody tr').not('.opacity-60').first().click({ force: true });
+    cy.get('table tbody tr').not('.opacity-60').contains('Zaposleni').first().closest('tr').click({ force: true });
     cy.wait(3000);
     cy.contains(/nazad na listu|otkaži|odustani|nazad/i).first().click();
     cy.url().should('include', '/admin/employees');

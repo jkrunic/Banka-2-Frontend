@@ -10,11 +10,22 @@ const listingService = {
     type: string = 'STOCK',
     search: string = '',
     page: number = 0,
-    size: number = 20
+    size: number = 20,
+    filters?: {
+      exchangePrefix?: string;
+      priceMin?: number;
+      priceMax?: number;
+      settlementDateFrom?: string;
+      settlementDateTo?: string;
+    }
   ): Promise<PaginatedResponse<Listing>> => {
-    const response = await api.get('/listings', {
-      params: { type, search, page, size },
-    });
+    const params: Record<string, unknown> = { type, search, page, size };
+    if (filters?.exchangePrefix) params.exchangePrefix = filters.exchangePrefix;
+    if (filters?.priceMin != null) params.priceMin = filters.priceMin;
+    if (filters?.priceMax != null) params.priceMax = filters.priceMax;
+    if (filters?.settlementDateFrom) params.settlementDateFrom = filters.settlementDateFrom;
+    if (filters?.settlementDateTo) params.settlementDateTo = filters.settlementDateTo;
+    const response = await api.get('/listings', { params });
     return response.data;
   },
 

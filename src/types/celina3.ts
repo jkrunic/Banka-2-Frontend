@@ -150,6 +150,7 @@ export interface UpdateActuaryLimit {
 
 export interface PortfolioItem {
   id: number;
+  listingId: number;
   listingTicker: string;
   listingName: string;
   listingType: ListingType;

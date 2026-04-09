@@ -137,8 +137,12 @@ export default function ActuaryManagementPage() {
       setEditingAgent(null);
       setEditDailyLimit('');
       setEditNeedApproval(false);
-    } catch {
-      toast.error('Azuriranje limita nije uspelo.');
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(msg || 'Azuriranje limita nije uspelo.');
     } finally {
       setSavingEdit(false);
     }

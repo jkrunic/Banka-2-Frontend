@@ -201,13 +201,14 @@ function getPriceSourceLabel(orderType: OrderType, direction: OrderDirection): s
 function getCommission(orderType: OrderType, approximatePrice: number): number {
   if (approximatePrice <= 0) return 0;
 
-  // Spec: Market/Stop → max(14% * price, $7), Limit/StopLimit → max(24% * price, $12)
+  // Spec: Market/Stop → min(14% * price, $7), Limit/StopLimit → min(24% * price, $12)
+  // "u zavisnosti od toga koji iznos je manji"
   const usesLimitPricing =
     orderType === OrderType.LIMIT || orderType === OrderType.STOP_LIMIT;
   const rate = usesLimitPricing ? 0.24 : 0.14;
-  const floor = usesLimitPricing ? 12 : 7;
+  const cap = usesLimitPricing ? 12 : 7;
 
-  return Math.max(approximatePrice * rate, floor);
+  return Math.min(approximatePrice * rate, cap);
 }
 
 function getDefaultCurrencyForListing(listing: Listing | null): string {

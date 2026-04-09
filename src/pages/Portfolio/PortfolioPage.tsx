@@ -351,7 +351,7 @@ export default function PortfolioPage() {
   }, []);
 
   const handleSell = (item: PortfolioItem) => {
-    navigate(`/orders/new?listingId=${item.id}&direction=SELL`);
+    navigate(`/orders/new?listingId=${item.listingId}&direction=SELL`);
   };
 
   const handlePublicQuantityChange = (id: number, e: ChangeEvent<HTMLInputElement>) => {

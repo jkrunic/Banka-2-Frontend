@@ -195,7 +195,9 @@ export interface Exchange {
   timeZone: string;
   openTime: string;
   closeTime: string;
-  isOpen: boolean;
+  isOpen?: boolean;
+  isCurrentlyOpen?: boolean;
+  currentlyOpen?: boolean;
   testMode?: boolean;
 }
 

@@ -158,7 +158,7 @@ export default function ExchangesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {exchange.isOpen ? (
+                        {(exchange.currentlyOpen ?? exchange.isCurrentlyOpen ?? exchange.isOpen) ? (
                           <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
                             Otvorena
                           </Badge>

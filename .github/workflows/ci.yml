@@ -172,7 +172,7 @@ jobs:
           wait-on: "http://localhost"
           wait-on-timeout: 60
           config: video=false,baseUrl=http://localhost
-          spec: "cypress/e2e/celina1-live.cy.ts,cypress/e2e/celina2-live.cy.ts,cypress/e2e/celina3-live.cy.ts"
+          spec: "cypress/e2e/celina1-live.cy.ts,cypress/e2e/celina2-live.cy.ts,cypress/e2e/celina3-live.cy.ts,cypress/e2e/e2e-scenario-live.cy.ts"
 
       - name: Upload screenshots on failure
         uses: actions/upload-artifact@v4

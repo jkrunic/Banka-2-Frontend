@@ -470,7 +470,7 @@ export default function CreateOrderPage() {
       .getByAcronym(selectedListingObj.exchangeAcronym)
       .then((exchange) => {
         if (!cancelled) {
-          setExchangeApiOpen({ isOpen: exchange.isOpen, name: exchange.name });
+          setExchangeApiOpen({ isOpen: exchange.currentlyOpen ?? exchange.isCurrentlyOpen ?? exchange.isOpen ?? false, name: exchange.name });
         }
       })
       .catch(() => {
@@ -1302,6 +1302,7 @@ export default function CreateOrderPage() {
 
                 <Button
                   type="button"
+                  data-cy="confirm-order"
                   onClick={handleConfirmOrder}
                   disabled={isSubmitting}
                   className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"

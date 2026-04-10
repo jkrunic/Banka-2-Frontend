@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ClipboardList, Inbox } from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
@@ -94,15 +94,32 @@ export default function OrdersListPage() {
     setConfirmAction(null);
   }, [statusFilter, page, loadOrders]);
 
-  const counts = useMemo(() => {
-    const safeOrders = asArray<Order>(orders);
-    const all = safeOrders.length;
-    const pending = safeOrders.filter((o) => o.status === 'PENDING').length;
-    const approved = safeOrders.filter((o) => o.status === 'APPROVED').length;
-    const declined = safeOrders.filter((o) => o.status === 'DECLINED').length;
-    const done = safeOrders.filter((o) => o.status === 'DONE' || o.isDone).length;
-    return { all, pending, approved, declined, done };
-  }, [orders]);
+  const [counts, setCounts] = useState({ all: 0, pending: 0, approved: 0, declined: 0, done: 0 });
+
+  // Fetch counts for all statuses independently so they don't show 0
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const [allRes, pendingRes, approvedRes, declinedRes, doneRes] = await Promise.all([
+          orderService.getAll('ALL', 0, 1),
+          orderService.getAll('PENDING', 0, 1),
+          orderService.getAll('APPROVED', 0, 1),
+          orderService.getAll('DECLINED', 0, 1),
+          orderService.getAll('DONE', 0, 1),
+        ]);
+        setCounts({
+          all: allRes.totalElements ?? 0,
+          pending: pendingRes.totalElements ?? 0,
+          approved: approvedRes.totalElements ?? 0,
+          declined: declinedRes.totalElements ?? 0,
+          done: doneRes.totalElements ?? 0,
+        });
+      } catch {
+        // Keep existing counts on error
+      }
+    };
+    fetchCounts();
+  }, [orders]); // Re-fetch counts when orders change (after approve/decline)
 
   const handleApprove = async (orderId: number) => {
     setProcessingId(orderId);

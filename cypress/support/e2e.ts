@@ -7,9 +7,9 @@ Cypress.on('uncaught:exception', (_err, _runnable) => {
   return false;
 });
 
-// Global: intercept common API endpoints to prevent 403/400 noise
+// Global: intercept auth refresh to prevent redirect loops in mock tests
 beforeEach(() => {
-  // Mock auth refresh with a properly decodable JWT - prevents redirect loops
+  // Only mock auth refresh — prevents redirect loops when using fake tokens
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const payload = btoa(JSON.stringify({ sub: 'test@test.rs', role: 'CLIENT', active: true, exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000) })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   cy.intercept('POST', '**/api/auth/refresh', {
@@ -17,15 +17,9 @@ beforeEach(() => {
     body: { accessToken: `${header}.${payload}.fakesig` },
   });
 
-  // Catch-all for common endpoints that pages may call during mount
-  // These have low priority and will be overridden by test-specific intercepts
-  cy.intercept('GET', '**/api/margin-accounts/**', { statusCode: 200, body: [] });
-  cy.intercept('GET', '**/api/portfolio/**', { statusCode: 200, body: [] });
-  cy.intercept('GET', '**/api/listings*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
-  cy.intercept('GET', '**/api/orders/**', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
-  cy.intercept('GET', '**/api/actuaries/**', { statusCode: 200, body: [] });
-  cy.intercept('GET', '**/api/tax*', { statusCode: 200, body: [] });
-  cy.intercept('GET', '**/api/exchanges', { statusCode: 200, body: [] });
+  // NOTE: API catch-all mocks moved to mockCommonEndpoints() command in commands.ts.
+  // Mock tests should call cy.mockCommonEndpoints() in their own beforeEach.
+  // This prevents global mocks from blocking real API calls in live tests.
 });
 
 // Global: fix "fake-access-token" that doesn't have JWT structure

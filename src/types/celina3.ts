@@ -161,6 +161,8 @@ export interface PortfolioItem {
   profitPercent: number;
   publicQuantity: number;
   lastModified: string;
+  settlementDate?: string;
+  inTheMoney?: boolean;
 }
 
 export interface PortfolioSummary {

@@ -275,6 +275,7 @@ export default function CreateOrderPage() {
   const [pendingOrder, setPendingOrder] = useState<CreateOrderFormValues | null>(null);
   const [exchangeApiOpen, setExchangeApiOpen] = useState<{ isOpen: boolean; name: string } | null>(null);
   const [exchangeApiLoading, setExchangeApiLoading] = useState(false);
+  const [invalidListingRequested, setInvalidListingRequested] = useState(false);
 
   const canUseMargin = isAdmin || hasPermission(Permission.TRADE_STOCKS);
 
@@ -345,7 +346,7 @@ export default function CreateOrderPage() {
             const listing = await listingService.getById(requestedListingId);
             nextListings = [listing, ...nextListings];
           } catch {
-            // no-op
+            if (mounted) setInvalidListingRequested(true);
           }
         }
 
@@ -660,6 +661,16 @@ export default function CreateOrderPage() {
             <TriangleAlert className="h-4 w-4" />
             <AlertTitle>Greška pri učitavanju</AlertTitle>
             <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
+
+        {invalidListingRequested && (
+          <Alert variant="destructive">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Hartija ne postoji</AlertTitle>
+            <AlertDescription>
+              Tražena hartija (ID: {requestedListingIdParam}) nije pronađena. Možete izabrati drugu hartiju iz liste ispod.
+            </AlertDescription>
           </Alert>
         )}
 

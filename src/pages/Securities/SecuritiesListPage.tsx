@@ -165,7 +165,11 @@ export default function SecuritiesListPage() {
     && Number(debouncedFilters.priceMin) > Number(debouncedFilters.priceMax);
 
   const fetchData = useCallback(async () => {
-    if (priceRangeError) return;
+    if (priceRangeError) {
+      setData({ content: [], totalPages: 0, totalElements: 0, number: 0, size: PAGE_SIZE } as PaginatedResponse<Listing>);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const filters: Record<string, string | number> = {};
@@ -191,13 +195,14 @@ export default function SecuritiesListPage() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
+      toast.success('Osvezavanje cena pokrenuto...');
       await listingService.refresh();
       toast.success('Cene uspesno osvezene');
-      fetchData();
     } catch {
-      toast.error('Greska pri osvezavanju cena');
+      toast.error('Greska pri osvezavanju cena. Pokusajte ponovo.');
     } finally {
       setRefreshing(false);
+      fetchData();
     }
   };
 

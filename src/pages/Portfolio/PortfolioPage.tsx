@@ -543,6 +543,8 @@ export default function PortfolioPage() {
                       <TableHead>Trenutna cena</TableHead>
                       <TableHead>Profit</TableHead>
                       <TableHead>Profit%</TableHead>
+                      <TableHead>ITM</TableHead>
+                      <TableHead>Datum isteka</TableHead>
                       <TableHead>Poslednja izmena</TableHead>
                       <TableHead className="text-right">Akcije</TableHead>
                     </TableRow>
@@ -589,6 +591,20 @@ export default function PortfolioPage() {
                             }`}
                           >
                             {isProfitPositive ? '+' : ''}{formatPercent(item.profitPercent)}
+                          </TableCell>
+
+                          <TableCell>
+                            {item.inTheMoney != null ? (
+                              <Badge variant={item.inTheMoney ? 'success' : 'destructive'}>
+                                {item.inTheMoney ? 'Da' : 'Ne'}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+
+                          <TableCell>
+                            {item.settlementDate
+                              ? new Date(item.settlementDate).toLocaleDateString('sr-RS')
+                              : '-'}
                           </TableCell>
 
                           <TableCell>{formatDateTime(item.lastModified)}</TableCell>

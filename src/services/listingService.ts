@@ -55,7 +55,7 @@ const listingService = {
    * Rucno osvezavanje cena hartija.
    */
   refresh: async (): Promise<void> => {
-    await api.post('/listings/refresh');
+    await api.post('/listings/refresh', null, { timeout: 300000 });
   },
 
   /**

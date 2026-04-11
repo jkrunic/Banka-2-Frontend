@@ -5,11 +5,13 @@ import type { Permission } from '../../types';
 interface ProtectedRouteProps {
   requiredPermission?: Permission;
   adminOnly?: boolean;
+  employeeOnly?: boolean;
 }
 
 export default function ProtectedRoute({
   requiredPermission,
   adminOnly = false,
+  employeeOnly = false,
 }: ProtectedRouteProps) {
   const { user, isLoading, hasPermission, isAdmin } = useAuth();
 
@@ -22,6 +24,11 @@ export default function ProtectedRoute({
   }
 
   if (adminOnly && !isAdmin) {
+    return <Navigate to="/403" replace />;
+  }
+
+  // employeeOnly: allow any employee (ADMIN or EMPLOYEE role)
+  if (employeeOnly && user.role !== 'ADMIN' && user.role !== 'EMPLOYEE') {
     return <Navigate to="/403" replace />;
   }
 

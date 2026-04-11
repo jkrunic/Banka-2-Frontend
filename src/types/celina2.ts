@@ -386,9 +386,4 @@ export interface ClientFilters {
   limit?: number;
 }
 
-export interface VerificationRequest {
-  transactionId: number;
-  code: string;
-}
-
 

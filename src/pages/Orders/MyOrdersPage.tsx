@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/context/AuthContext';
 import orderService from '@/services/orderService';
 import {
   ListingType,
@@ -26,6 +27,7 @@ import {
   OrderType,
   type Order,
 } from '@/types/celina3';
+import { asArray, formatAmount, formatDateTime } from '@/utils/formatters';
 
 const LISTING_TYPE_LABELS: Record<string, string> = {
   [ListingType.STOCK]: 'Akcija',
@@ -52,26 +54,6 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   [OrderStatus.DONE]: 'Zavrsen',
 };
 
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-
-  return new Intl.NumberFormat('sr-RS', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(Number.isFinite(num) ? num : 0);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('sr-RS');
-}
-
 function getTimestamp(value: string | null | undefined): number {
   if (!value) return 0;
 
@@ -94,7 +76,8 @@ function getDirectionIcon(direction: OrderDirection) {
   return direction === OrderDirection.BUY ? TrendingUp : TrendingDown;
 }
 
-function getCommission(orderType: OrderType, approximatePrice: number): number {
+function getCommission(orderType: OrderType, approximatePrice: number, isEmployee: boolean = false): number {
+  if (isEmployee) return 0;
   if (approximatePrice <= 0) return 0;
 
   // Spec: Market/Stop → min(14% * price, $7), Limit/StopLimit → min(24% * price, $12)
@@ -192,6 +175,8 @@ const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 export default function MyOrdersPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isEmployeeRole = user?.role === 'ADMIN' || user?.role === 'EMPLOYEE';
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -349,7 +334,7 @@ export default function MyOrdersPage() {
   }, [sortedOrders, statusFilter]);
 
   const selectedOrderCommission = selectedOrder
-    ? getCommission(selectedOrder.orderType, Number(selectedOrder.approximatePrice ?? 0))
+    ? getCommission(selectedOrder.orderType, Number(selectedOrder.approximatePrice ?? 0), isEmployeeRole)
     : 0;
 
   const selectedOrderTotal =

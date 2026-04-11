@@ -102,37 +102,6 @@ describe('transactionService', () => {
     });
   });
 
-  // ==================== verifyPayment ====================
-
-  describe('verifyPayment', () => {
-    it('should send verification data', async () => {
-      const verifyData = { transactionId: 1, code: '123456' };
-      const mockResponse = { verified: true, message: 'OK' };
-      mockedApi.post.mockResolvedValue({ data: mockResponse });
-
-      const result = await transactionService.verifyPayment(verifyData);
-
-      expect(mockedApi.post).toHaveBeenCalledWith('/payments/verify', verifyData);
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('should return blocked status when blocked', async () => {
-      const verifyData = { transactionId: 1, code: '000000' };
-      const mockResponse = { verified: false, blocked: true, message: 'Blocked' };
-      mockedApi.post.mockResolvedValue({ data: mockResponse });
-
-      const result = await transactionService.verifyPayment(verifyData);
-
-      expect(result.blocked).toBe(true);
-      expect(result.verified).toBe(false);
-    });
-
-    it('should propagate errors', async () => {
-      mockedApi.post.mockRejectedValue(new Error('Verification failed'));
-      await expect(transactionService.verifyPayment({ transactionId: 1, code: '111' })).rejects.toThrow();
-    });
-  });
-
   // ==================== getAll ====================
 
   describe('getAll', () => {

@@ -20,6 +20,7 @@ import {
 import type { Listing, ListingDailyPrice, OptionChain } from '@/types/celina3';
 import listingService from '@/services/listingService';
 import { toast } from '@/lib/notify';
+import { formatPrice } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -49,12 +50,7 @@ const PERIODS = [
   { key: 'ALL', label: 'Sve', days: 120 },
 ] as const;
 
-function formatPrice(price: number | null | undefined): string {
-  if (price == null) return '-';
-  return price.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatVolume(vol: number | null | undefined): string {
+function formatVolumeCompact(vol: number | null | undefined): string {
   if (vol == null) return '-';
   if (vol >= 1_000_000_000) return `${(vol / 1_000_000_000).toFixed(2)}B`;
   if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
@@ -64,38 +60,67 @@ function formatVolume(vol: number | null | undefined): string {
 
 function generateFakeHistory(basePrice: number, days: number): ListingDailyPrice[] {
   const data: ListingDailyPrice[] = [];
-  // Start from an earlier price using mean-reverting random walk
-  const dailyVolatility = 0.015; // 1.5% daily volatility
-  const meanReversionStrength = 0.05;
-  let price = basePrice * (0.9 + Math.random() * 0.1); // Start 90-100% of current price
-  const avgVolume = Math.max(50000, Math.floor(basePrice * 500));
+  // Geometric Brownian Motion simulation for realistic stock prices
+  const annualVolatility = 0.30; // 30% annual volatility (typical for stocks)
+  const annualDrift = 0.08; // 8% annual drift (expected return)
+  const dailyVol = annualVolatility / Math.sqrt(252);
+  const dailyDrift = annualDrift / 252;
+  const avgVolume = Math.max(50000, Math.floor(basePrice * 800));
+
+  // Start from an earlier price, working backwards from current
+  let price = basePrice * (0.85 + Math.random() * 0.1);
+
+  // Add momentum and mean-reversion regimes
+  let momentum = 0;
+  const regimeLength = Math.max(5, Math.floor(days * 0.15)); // regime changes every ~15% of period
 
   for (let i = days; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
 
-    // Mean-reverting random walk: drift toward basePrice at the end
-    const drift = (basePrice - price) * meanReversionStrength / Math.max(days, 1);
-    const randomShock = (Math.random() - 0.5) * 2 * basePrice * dailyVolatility;
-    const change = drift + randomShock;
-    price = Math.max(price + change, basePrice * 0.5);
+    // Regime changes: trending or mean-reverting
+    if (i % regimeLength === 0) {
+      momentum = (Math.random() - 0.5) * dailyVol * 2;
+    }
 
-    const dayRange = Math.abs(randomShock) + basePrice * 0.005;
-    const high = price + dayRange * (0.3 + Math.random() * 0.7);
-    const low = price - dayRange * (0.3 + Math.random() * 0.7);
-    // Volume varies with volatility - bigger moves = more volume
-    const volMultiplier = 0.5 + Math.abs(change / basePrice) * 20 + Math.random();
-    const volume = Math.floor(avgVolume * volMultiplier);
+    // Mean reversion toward basePrice (stronger as we get closer to today)
+    const distanceToEnd = i / Math.max(days, 1);
+    const meanReversion = (basePrice - price) * (0.02 + (1 - distanceToEnd) * 0.08);
+
+    // Random component (log-normal)
+    const z = (Math.random() + Math.random() + Math.random() - 1.5) * 1.22; // ~normal approx
+    const randomReturn = dailyDrift + momentum + z * dailyVol;
+    const change = price * randomReturn + meanReversion;
+
+    price = Math.max(price + change, basePrice * 0.3);
+
+    // Intraday range: higher on volatile days
+    const intraVol = Math.abs(z) * 0.5 + 0.3;
+    const dayRange = price * dailyVol * intraVol * 2;
+    const high = price + dayRange * (0.5 + Math.random() * 0.5);
+    const low = price - dayRange * (0.5 + Math.random() * 0.5);
+
+    // Volume: mean-reverting with volatility correlation
+    const volShock = Math.abs(z) * 1.5 + 0.5; // higher volume on big moves
+    const dayOfWeek = date.getDay();
+    const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.3 : 1.0;
+    const volume = Math.floor(avgVolume * volShock * weekendFactor * (0.7 + Math.random() * 0.6));
 
     data.push({
       date: date.toISOString().split('T')[0],
       price: Math.round(price * 100) / 100,
-      high: Math.round(high * 100) / 100,
-      low: Math.round(Math.max(low, price * 0.95) * 100) / 100,
+      high: Math.round(Math.max(high, price) * 100) / 100,
+      low: Math.round(Math.max(Math.min(low, price), price * 0.9) * 100) / 100,
       change: Math.round(change * 100) / 100,
-      volume,
+      volume: Math.max(volume, 100),
     });
   }
+
+  // Ensure last point matches current price
+  if (data.length > 0) {
+    data[data.length - 1].price = basePrice;
+  }
+
   return data;
 }
 
@@ -245,9 +270,13 @@ export default function SecuritiesDetailsPage() {
     };
   }, [selectedChain, strikeCountFilter]);
 
-  // Generate fake data when history is empty
+  // Generate fake data when history is empty; ensure oldest-first order for chart
   const chartData = useMemo(() => {
-    if (history.length > 0) return history;
+    if (history.length > 0) {
+      // API may return newest-first; sort by date ascending for chart display
+      const sorted = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return sorted;
+    }
     if (!listing) return [];
     const periodDays = PERIODS.find(p => p.key === period)?.days ?? 30;
     return generateFakeHistory(listing.price, periodDays);
@@ -352,9 +381,15 @@ export default function SecuritiesDetailsPage() {
                     <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-600" />
                     Kretanje cene
                   </CardTitle>
-                  {isSimulated && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 font-mono text-amber-600 dark:text-amber-400 border-amber-400/40 bg-amber-500/5">
-                      Simulirani podaci
+                  {isSimulated ? (
+                    <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-mono text-amber-600 dark:text-amber-400 border-amber-400/40 bg-amber-500/5 gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                      SIMULIRANI PODACI
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-400/40 bg-emerald-500/5 gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                      LIVE
                     </Badge>
                   )}
                 </div>
@@ -450,7 +485,7 @@ export default function SecuritiesDetailsPage() {
               </div>
               {isSimulated && (
                 <p className="text-[10px] text-amber-600/60 dark:text-amber-400/50 text-center mt-2 font-mono">
-                  * Prikazani su simulirani podaci jer istorijski podaci jos nisu dostupni sa servera
+                  * Prikazani su simulirani podaci (Geometric Brownian Motion model) jer API trenutno ne vraca istorijske podatke. Podaci su generisani na osnovu trenutne cene sa realisticnom volatilnoscu.
                 </p>
               )}
             </CardContent>
@@ -479,13 +514,13 @@ export default function SecuritiesDetailsPage() {
                   value={formatPrice(listing.ask)}
                   sub={spread != null ? `Spread: ${formatPrice(spread)}` : undefined}
                 />
-                <StatItem label="Volume" value={formatVolume(listing.volume)} />
+                <StatItem label="Volume" value={formatVolumeCompact(listing.volume)} />
                 <StatItem label="Initial Margin" value={formatPrice(listing.initialMarginCost)} />
                 <StatItem label="Maintenance Margin" value={formatPrice(listing.maintenanceMargin)} />
 
                 {/* Stock-specific */}
                 {listing.listingType === 'STOCK' && listing.marketCap != null && (
-                  <StatItem label="Market Cap" value={formatVolume(listing.marketCap)} />
+                  <StatItem label="Market Cap" value={formatVolumeCompact(listing.marketCap)} />
                 )}
                 {listing.listingType === 'STOCK' && listing.outstandingShares != null && (
                   <StatItem label="Shares Outstanding" value={listing.outstandingShares.toLocaleString('sr-RS')} />
@@ -543,7 +578,7 @@ export default function SecuritiesDetailsPage() {
                   />
                   <StatItem
                     label="Ukupan volume"
-                    value={formatVolume(chartData.reduce((s, d) => s + d.volume, 0))}
+                    value={formatVolumeCompact(chartData.reduce((s, d) => s + d.volume, 0))}
                   />
                 </div>
               </CardContent>
@@ -562,10 +597,12 @@ export default function SecuritiesDetailsPage() {
                   </CardTitle>
                   {optionChains.length > 0 && (
                     <div className="flex items-center gap-2">
-                      <Select value={selectedSettlementDate} onValueChange={setSelectedSettlementDate}>
-                        <SelectTrigger className="w-[180px] h-8 text-xs">
-                          <SelectValue placeholder="Datum dospeća" />
-                        </SelectTrigger>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Datum:</span>
+                        <Select value={selectedSettlementDate} onValueChange={setSelectedSettlementDate}>
+                          <SelectTrigger className="w-[180px] h-8 text-xs">
+                            <SelectValue placeholder="Datum dospeća" />
+                          </SelectTrigger>
                         <SelectContent>
                           {optionChains.map((chain) => (
                             <SelectItem key={chain.settlementDate} value={chain.settlementDate}>
@@ -574,17 +611,21 @@ export default function SecuritiesDetailsPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Select value={strikeCountFilter} onValueChange={setStrikeCountFilter}>
-                        <SelectTrigger className="w-[100px] h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="20">20</SelectItem>
-                          <SelectItem value="ALL">Sve</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Strike:</span>
+                        <Select value={strikeCountFilter} onValueChange={setStrikeCountFilter}>
+                          <SelectTrigger className="w-[100px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="ALL">Sve</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -613,10 +654,16 @@ export default function SecuritiesDetailsPage() {
                           <TableHead className="text-center text-xs font-semibold">Call Bid</TableHead>
                           <TableHead className="text-center text-xs font-semibold">Call Ask</TableHead>
                           <TableHead className="text-center text-xs font-semibold">Call Last</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Call Vol</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Call IV</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">ITM</TableHead>
                           <TableHead className="text-center text-xs font-bold bg-muted/30">Strike</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">ITM</TableHead>
                           <TableHead className="text-center text-xs font-semibold">Put Bid</TableHead>
                           <TableHead className="text-center text-xs font-semibold">Put Ask</TableHead>
                           <TableHead className="text-center text-xs font-semibold">Put Last</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Put Vol</TableHead>
+                          <TableHead className="text-center text-xs font-semibold">Put IV</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -641,7 +688,7 @@ export default function SecuritiesDetailsPage() {
                               separatorInserted = true;
                               rows.push(
                                 <TableRow key="separator" className="border-0">
-                                  <TableCell colSpan={7} className="p-0">
+                                  <TableCell colSpan={13} className="p-0">
                                     <div className="flex items-center gap-2 py-1">
                                       <div className="flex-1 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
                                       <span className="text-[10px] font-mono font-bold text-indigo-500 whitespace-nowrap">
@@ -674,8 +721,28 @@ export default function SecuritiesDetailsPage() {
                                 <TableCell className="text-center font-mono text-xs tabular-nums font-semibold">
                                   {call ? formatPrice(call.price) : '-'}
                                 </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {call ? formatVolumeCompact(call.volume) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {call ? `${(call.impliedVolatility * 100).toFixed(1)}%` : '-'}
+                                </TableCell>
+                                <TableCell className="text-center text-xs font-semibold">
+                                  {callITM ? (
+                                    <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] px-1.5">ITM</Badge>
+                                  ) : (
+                                    <Badge className="bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20 text-[10px] px-1.5">OTM</Badge>
+                                  )}
+                                </TableCell>
                                 <TableCell className="text-center font-mono text-xs tabular-nums font-bold bg-muted/30">
                                   {formatPrice(strike)}
+                                </TableCell>
+                                <TableCell className="text-center text-xs font-semibold">
+                                  {putITM ? (
+                                    <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] px-1.5">ITM</Badge>
+                                  ) : (
+                                    <Badge className="bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20 text-[10px] px-1.5">OTM</Badge>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-center font-mono text-xs tabular-nums">
                                   {put ? formatPrice(put.bid) : '-'}
@@ -685,6 +752,12 @@ export default function SecuritiesDetailsPage() {
                                 </TableCell>
                                 <TableCell className="text-center font-mono text-xs tabular-nums font-semibold">
                                   {put ? formatPrice(put.price) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {put ? formatVolumeCompact(put.volume) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-mono text-xs tabular-nums">
+                                  {put ? `${(put.impliedVolatility * 100).toFixed(1)}%` : '-'}
                                 </TableCell>
                               </TableRow>
                             );

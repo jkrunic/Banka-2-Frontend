@@ -25,7 +25,7 @@ const exchangeManagementService = {
    * Ukljucuje ili iskljucuje test mod za berzu.
    */
   setTestMode: async (acronym: string, enabled: boolean): Promise<void> => {
-    await api.patch(`/exchanges/${acronym}/test-mode`, { testMode: enabled });
+    await api.patch(`/exchanges/${acronym}/test-mode`, { enabled });
   },
 };
 

@@ -269,6 +269,10 @@ describe('E2E: Kompletan radni dan na berzi', () => {
   // ============================================================
   it('DEO 7 — Klijent prodaje hartije iz portfolija', () => {
     loginAs('client-e2e', CLIENT);
+
+    // Register intercept BEFORE any navigation so it catches all matching requests
+    cy.intercept('POST', '**/orders').as('sellOrder');
+
     cy.visit('/portfolio');
 
     // Wait for portfolio items to load, then click Prodaj (force due to overflow:hidden)
@@ -290,9 +294,6 @@ describe('E2E: Kompletan radni dan na berzi', () => {
       cy.get('select#accountId').select($opt.val() as string);
     });
 
-    // Intercept za pracenje POST zahteva
-    cy.intercept('POST', '**/api/orders').as('sellOrder');
-
     // Submit
     cy.contains('button', 'Nastavi na potvrdu').click();
 
@@ -306,7 +307,7 @@ describe('E2E: Kompletan radni dan na berzi', () => {
     });
 
     // Sacekaj API odgovor
-    cy.wait('@sellOrder', { timeout: 15000 }).its('response.statusCode').should('eq', 200);
+    cy.wait('@sellOrder', { timeout: 15000 }).its('response.statusCode').should('be.oneOf', [200, 201]);
     cy.url({ timeout: 15000 }).should('include', '/orders/my');
   });
 

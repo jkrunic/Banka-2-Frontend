@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/lib/notify';
 import {
-  Users, UserPlus, Building2, BookUser, ShieldCheck, FileText,
-  Wallet, Send, CreditCard,
-  TrendingUp, Landmark, ArrowRightLeft, PiggyBank,
-  ChevronRight, Banknote, BarChart3, Clock, Eye, EyeOff, Plus,
+  Users, UserPlus, Building2, BookUser, ShieldCheck,
+  Wallet, Send, CreditCard, Briefcase, ShoppingCart,
+  TrendingUp, TrendingDown, Landmark, ArrowRightLeft, PiggyBank,
+  ChevronRight, Banknote, BarChart3, Clock, Eye, EyeOff, Plus, ClipboardList,
 } from 'lucide-react';
 import { accountService } from '@/services/accountService';
 import { currencyService } from '@/services/currencyService';
@@ -13,11 +13,15 @@ import { transactionService } from '@/services/transactionService';
 import { employeeService } from '@/services/employeeService';
 import { creditService } from '@/services/creditService';
 import { paymentRecipientService } from '@/services/paymentRecipientService';
+import portfolioService from '@/services/portfolioService';
+import orderService from '@/services/orderService';
+import type { PortfolioSummary, Order } from '@/types/celina3';
 import type { Account, ExchangeRate, Transaction, PaymentRecipient } from '@/types/celina2';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
+import { asArray, formatAmount, formatDate } from '@/utils/formatters';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line,
@@ -26,25 +30,11 @@ import {
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '0,00';
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('sr-RS', { day: '2-digit', month: 'short' });
-}
 
 function formatTime(value: string | null | undefined): string {
   if (!value) return '';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' });
-}
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 /** Generate fake balance history data for a chart */
@@ -111,14 +101,35 @@ interface AdminCard {
   gradient: string;
 }
 
-const adminCards: AdminCard[] = [
-  { title: 'Zaposleni', description: 'Upravljanje nalozima', path: '/admin/employees', icon: <Users className="h-5 w-5" />, gradient: 'from-indigo-500 to-violet-600' },
-  { title: 'Novi zaposleni', description: 'Kreiranje naloga', path: '/admin/employees/new', icon: <UserPlus className="h-5 w-5" />, gradient: 'from-blue-500 to-indigo-600' },
-  { title: 'Racuni', description: 'Svi klijentski racuni', path: '/employee/accounts', icon: <Building2 className="h-5 w-5" />, gradient: 'from-emerald-500 to-green-600' },
-  { title: 'Klijenti', description: 'Pregled i izmena', path: '/employee/clients', icon: <BookUser className="h-5 w-5" />, gradient: 'from-amber-500 to-orange-600' },
-  { title: 'Zahtevi za kredit', description: 'Odobravanje kredita', path: '/employee/loan-requests', icon: <ShieldCheck className="h-5 w-5" />, gradient: 'from-rose-500 to-pink-600' },
-  { title: 'Svi krediti', description: 'Aktivni i zavrseni', path: '/employee/loans', icon: <FileText className="h-5 w-5" />, gradient: 'from-purple-500 to-violet-600' },
-];
+function getQuickCards(isAdmin: boolean, isSupervisor: boolean): AdminCard[] {
+  const cards: AdminCard[] = [];
+
+  if (isAdmin) {
+    cards.push(
+      { title: 'Zaposleni', description: 'Upravljanje nalozima', path: '/admin/employees', icon: <Users className="h-5 w-5" />, gradient: 'from-indigo-500 to-violet-600' },
+      { title: 'Novi zaposleni', description: 'Kreiranje naloga', path: '/admin/employees/new', icon: <UserPlus className="h-5 w-5" />, gradient: 'from-blue-500 to-indigo-600' },
+    );
+  }
+
+  cards.push(
+    { title: 'Racuni', description: 'Svi klijentski racuni', path: '/employee/accounts', icon: <Building2 className="h-5 w-5" />, gradient: 'from-emerald-500 to-green-600' },
+    { title: 'Klijenti', description: 'Pregled i izmena', path: '/employee/clients', icon: <BookUser className="h-5 w-5" />, gradient: 'from-amber-500 to-orange-600' },
+  );
+
+  if (isSupervisor || isAdmin) {
+    cards.push(
+      { title: 'Orderi', description: 'Pregled i odobravanje', path: '/employee/orders', icon: <ShieldCheck className="h-5 w-5" />, gradient: 'from-rose-500 to-pink-600' },
+      { title: 'Aktuari', description: 'Upravljanje limitima', path: '/employee/actuaries', icon: <TrendingUp className="h-5 w-5" />, gradient: 'from-purple-500 to-violet-600' },
+    );
+  }
+
+  cards.push(
+    { title: 'Berza', description: 'Hartije od vrednosti', path: '/securities', icon: <TrendingUp className="h-5 w-5" />, gradient: 'from-teal-500 to-cyan-600' },
+    { title: 'Portfolio', description: 'Moje hartije', path: '/portfolio', icon: <Wallet className="h-5 w-5" />, gradient: 'from-orange-500 to-amber-600' },
+  );
+
+  return cards;
+}
 
 const periodOptions = [
   { label: '1N', days: 7 },
@@ -221,7 +232,8 @@ function MiniSparkline({ data, color = '#ffffff' }: { data: number[]; color?: st
 // ────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSupervisor, isAgent } = useAuth();
+  const isEmployeeRole = user?.role === 'ADMIN' || user?.role === 'EMPLOYEE';
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
@@ -230,6 +242,9 @@ export default function HomePage() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [adminStats, setAdminStats] = useState({ employees: 0, active: 0, loans: 0, loading: true });
   const [chartPeriod, setChartPeriod] = useState(30);
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [employeeLoading, setEmployeeLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -254,8 +269,27 @@ export default function HomePage() {
     load();
   }, []);
 
+  // Load portfolio + orders for employee dashboard
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isEmployeeRole) return;
+    const loadEmpData = async () => {
+      setEmployeeLoading(true);
+      try {
+        const [summary, ordersRes] = await Promise.all([
+          portfolioService.getSummary().catch(() => null),
+          orderService.getMy(0, 5).catch(() => ({ content: [] })),
+        ]);
+        setPortfolioSummary(summary);
+        setRecentOrders(Array.isArray(ordersRes.content) ? ordersRes.content.slice(0, 5) : []);
+      } catch { /* ignore */ } finally {
+        setEmployeeLoading(false);
+      }
+    };
+    loadEmpData();
+  }, [isEmployeeRole]);
+
+  useEffect(() => {
+    if (!isEmployeeRole) return;
     const load = async () => {
       setAdminStats(prev => ({ ...prev, loading: true }));
       try {
@@ -273,7 +307,7 @@ export default function HomePage() {
       } catch { setAdminStats(prev => ({ ...prev, loading: false })); }
     };
     load();
-  }, [isAdmin]);
+  }, [isEmployeeRole]);
 
   // Total balance across all RSD accounts (for hero)
   const totalRSD = useMemo(() => accounts.filter(a => a.currency === 'RSD').reduce((s, a) => s + (a.balance ?? 0), 0), [accounts]);
@@ -310,11 +344,9 @@ export default function HomePage() {
   // Animated admin counters
   const animatedEmployees = useCountUp(adminStats.loading ? 0 : adminStats.employees);
   const animatedActive = useCountUp(adminStats.loading ? 0 : adminStats.active);
-  const animatedInactive = useCountUp(adminStats.loading ? 0 : Math.max(adminStats.employees - adminStats.active, 0));
-  const animatedLoans = useCountUp(adminStats.loading ? 0 : adminStats.loans);
 
   // ──────────────── CLIENT DASHBOARD ────────────────
-  if (!isAdmin) return (
+  if (!isEmployeeRole) return (
     <div className="space-y-8 animate-fade-up">
       {/* Hero - Total Balance */}
       {loading ? <HeroSkeleton /> : (
@@ -746,82 +778,265 @@ export default function HomePage() {
     </div>
   );
 
-  // ──────────────── ADMIN DASHBOARD ────────────────
+  // ──────────────── EMPLOYEE / ADMIN DASHBOARD ────────────────
+  const portfolioProfit = portfolioSummary?.totalProfit ?? 0;
+  const portfolioValue = portfolioSummary?.totalValue ?? 0;
+  const paidTax = portfolioSummary?.paidTaxThisYear ?? 0;
+  const animatedPortfolio = useCountUp(employeeLoading ? 0 : Math.round(portfolioValue));
+  const pendingOrders = recentOrders.filter(o => o.status === 'PENDING').length;
+  const approvedOrders = recentOrders.filter(o => o.status === 'APPROVED').length;
+  const doneOrders = recentOrders.filter(o => o.status === 'DONE' || o.isDone).length;
+
   return (
     <div className="space-y-8 animate-fade-up">
-      {/* Admin Hero */}
+      {/* Hero */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 p-8 sm:p-10 text-white shadow-2xl">
-        {/* Decorative grid */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50" />
         <div className="absolute top-0 right-0 -mt-20 -mr-20 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="absolute bottom-0 left-1/4 -mb-20 h-48 w-48 rounded-full bg-violet-500/10 blur-3xl" />
 
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-medium text-indigo-300 uppercase tracking-widest">Admin panel</span>
+        <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-medium text-indigo-300 uppercase tracking-widest">
+                {isAdmin ? 'Admin panel' : isSupervisor ? 'Supervizor panel' : isAgent ? 'Agent panel' : 'Employee portal'}
+              </span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              {greeting}, {user?.firstName ?? 'Korisnice'}
+            </h1>
+            <p className="mt-2 text-indigo-300 max-w-lg">
+              {isAdmin
+                ? 'Upravljajte zaposlenima, klijentima, kreditima i pratite rad banke.'
+                : isSupervisor
+                ? 'Nadgledajte naloge, upravljajte aktuarima i pratite trgovinu.'
+                : 'Pratite naloge i trgovinu na berzi.'}
+            </p>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            {greeting}, {user?.firstName ?? 'Admin'}
-          </h1>
-          <p className="mt-2 text-indigo-300 max-w-lg">
-            Upravljajte zaposlenima, klijentima, kreditima i pratite rad banke.
-          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Berza', icon: <TrendingUp className="h-3.5 w-3.5" />, path: '/securities' },
+              { label: 'Portfolio', icon: <Briefcase className="h-3.5 w-3.5" />, path: '/portfolio' },
+              { label: 'Novi nalog', icon: <Plus className="h-3.5 w-3.5" />, path: '/orders/new' },
+            ].map(a => (
+              <button
+                key={a.path}
+                type="button"
+                onClick={() => navigate(a.path)}
+                className="flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur-sm px-4 py-2 text-sm font-medium text-white hover:bg-white/25 transition-all duration-300 hover:scale-105"
+              >
+                {a.icon}{a.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Admin Stats - animated counters */}
+      {/* Stats Widgets */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Zaposleni', value: animatedEmployees, icon: <Users className="h-5 w-5" />, gradient: 'from-indigo-500/10 to-violet-500/10', iconColor: 'text-indigo-500', borderColor: 'border-l-indigo-500' },
-          { label: 'Aktivnih', value: animatedActive, icon: <TrendingUp className="h-5 w-5" />, gradient: 'from-emerald-500/10 to-green-500/10', iconColor: 'text-emerald-500', borderColor: 'border-l-emerald-500' },
-          { label: 'Neaktivnih', value: animatedInactive, icon: <Users className="h-5 w-5" />, gradient: 'from-amber-500/10 to-orange-500/10', iconColor: 'text-amber-500', borderColor: 'border-l-amber-500' },
-          { label: 'Krediti', value: animatedLoans, icon: <PiggyBank className="h-5 w-5" />, gradient: 'from-rose-500/10 to-pink-500/10', iconColor: 'text-rose-500', borderColor: 'border-l-rose-500' },
-        ].map(stat => (
-          <Card key={stat.label} className={`relative overflow-hidden border-l-4 ${stat.borderColor} rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]`}>
-            <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient}`} />
+        <Card className="relative overflow-hidden border-l-4 border-l-indigo-500 rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-violet-500/10" />
+          <CardHeader className="relative flex flex-row items-center justify-between pb-1">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Vrednost portfolija</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 text-indigo-500">
+              <Briefcase className="h-5 w-5" />
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            <div className="text-2xl font-bold font-mono tabular-nums">
+              {employeeLoading ? '\u2014' : `${formatAmount(animatedPortfolio)}`}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">USD ukupna vrednost</p>
+          </CardContent>
+        </Card>
+
+        <Card className={`relative overflow-hidden border-l-4 ${portfolioProfit >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'} rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]`}>
+          <div className={`absolute inset-0 bg-gradient-to-br ${portfolioProfit >= 0 ? 'from-emerald-500/10 to-green-500/10' : 'from-red-500/10 to-rose-500/10'}`} />
+          <CardHeader className="relative flex flex-row items-center justify-between pb-1">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit/Gubitak</CardTitle>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 ${portfolioProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              {portfolioProfit >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            <div className={`text-2xl font-bold font-mono tabular-nums ${portfolioProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {employeeLoading ? '\u2014' : `${portfolioProfit >= 0 ? '+' : ''}${formatAmount(portfolioProfit)}`}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">USD ukupan profit</p>
+          </CardContent>
+        </Card>
+
+        {isAdmin && (
+          <Card className="relative overflow-hidden border-l-4 border-l-amber-500 rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-orange-500/10" />
             <CardHeader className="relative flex flex-row items-center justify-between pb-1">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-              <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 ${stat.iconColor}`}>
-                {stat.icon}
+              <CardTitle className="text-sm font-medium text-muted-foreground">Zaposleni</CardTitle>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 text-amber-500">
+                <Users className="h-5 w-5" />
               </div>
             </CardHeader>
             <CardContent className="relative">
-              <div className="text-3xl font-bold font-mono tabular-nums">
-                {adminStats.loading ? '\u2014' : stat.value}
+              <div className="text-2xl font-bold font-mono tabular-nums">
+                {adminStats.loading ? '\u2014' : `${animatedActive} / ${animatedEmployees}`}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">aktivnih / ukupno</p>
             </CardContent>
           </Card>
-        ))}
+        )}
+
+        {!isAdmin && (
+          <Card className="relative overflow-hidden border-l-4 border-l-amber-500 rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-orange-500/10" />
+            <CardHeader className="relative flex flex-row items-center justify-between pb-1">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Porez</CardTitle>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 text-amber-500">
+                <Landmark className="h-5 w-5" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative">
+              <div className="text-2xl font-bold font-mono tabular-nums">
+                {employeeLoading ? '\u2014' : formatAmount(paidTax)}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">RSD placen ove godine</p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="relative overflow-hidden border-l-4 border-l-rose-500 rounded-2xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-pink-500/10" />
+          <CardHeader className="relative flex flex-row items-center justify-between pb-1">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Nalozi</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background/80 text-rose-500">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            <div className="flex items-center gap-3">
+              {pendingOrders > 0 && <Badge variant="warning" className="text-xs">{pendingOrders} na cekanju</Badge>}
+              {approvedOrders > 0 && <Badge variant="info" className="text-xs">{approvedOrders} aktivn{approvedOrders === 1 ? '' : 'a'}</Badge>}
+              {doneOrders > 0 && <Badge variant="success" className="text-xs">{doneOrders} zavrsen{doneOrders === 1 ? '' : 'a'}</Badge>}
+              {recentOrders.length === 0 && <span className="text-sm text-muted-foreground">Nema naloga</span>}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Admin Quick Actions */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-indigo-500" />
-          Upravljanje
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {adminCards.map(card => (
-            <Card
-              key={card.path}
-              className="group cursor-pointer rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 border-0 bg-muted/20 hover:bg-background"
-              onClick={() => navigate(card.path)}
-            >
-              <CardContent className="flex items-center gap-4 py-5">
-                <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
-                  {card.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{card.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{card.description}</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-2" />
+      {/* Two columns: Quick Actions + Recent Orders */}
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Quick Actions */}
+        <section className="lg:col-span-3">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-indigo-500" />
+            Brze akcije
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {getQuickCards(isAdmin, isSupervisor).map(card => (
+              <Card
+                key={card.path}
+                className="group cursor-pointer rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 border-0 bg-muted/20 hover:bg-background"
+                onClick={() => navigate(card.path)}
+              >
+                <CardContent className="flex items-center gap-4 py-5">
+                  <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
+                    {card.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{card.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{card.description}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Recent Orders */}
+        <section className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-indigo-500" />
+              Poslednji nalozi
+            </h2>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => navigate('/orders/my')}>
+              Svi <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+          {employeeLoading ? (
+            <Card className="rounded-2xl">
+              <CardContent className="py-6 space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full animate-pulse bg-muted" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                    </div>
+                    <div className="h-5 w-16 animate-pulse rounded bg-muted" />
+                  </div>
+                ))}
               </CardContent>
             </Card>
-          ))}
-        </div>
-      </section>
+          ) : recentOrders.length === 0 ? (
+            <Card className="rounded-2xl">
+              <CardContent className="flex flex-col items-center text-center py-12">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-3">
+                  <ClipboardList className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <p className="font-semibold">Nema nedavnih naloga</p>
+                <p className="text-sm text-muted-foreground mt-1">Kreirajte nalog na stranici Berza.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => navigate('/securities')}
+                >
+                  <TrendingUp className="mr-2 h-4 w-4" /> Idi na berzu
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2.5">
+              {recentOrders.map((order, idx) => {
+                const isBuy = order.direction === 'BUY';
+                return (
+                  <Card
+                    key={order.id}
+                    className="rounded-2xl border shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer hover:-translate-y-0.5"
+                    style={{ animationDelay: `${idx * 60}ms`, animationFillMode: 'both' }}
+                    onClick={() => navigate('/orders/my')}
+                  >
+                    <CardContent className="flex items-center gap-3 py-3 px-4">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${isBuy ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                        {isBuy ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                          {isBuy ? 'Kupovina' : 'Prodaja'} {order.listingTicker}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{order.quantity} x {formatAmount(order.pricePerUnit)}</p>
+                      </div>
+                      <Badge
+                        variant={
+                          order.status === 'PENDING' ? 'warning' :
+                          order.status === 'APPROVED' ? 'info' :
+                          order.status === 'DONE' ? 'success' : 'destructive'
+                        }
+                        className="text-[10px]"
+                      >
+                        {order.status === 'PENDING' ? 'Ceka' :
+                         order.status === 'APPROVED' ? 'Aktivan' :
+                         order.status === 'DONE' ? 'Zavrsen' : 'Odbijen'}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { toast } from '@/lib/notify';
 import { accountService } from '@/services/accountService';
 import { transactionService } from '@/services/transactionService';
 import type { Account, Transaction } from '@/types/celina2';
+import { formatBalance, formatAccountNumber } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,17 +62,6 @@ const txStatusVariant: Record<string, 'warning' | 'success' | 'destructive' | 's
 const currencySymbols: Record<string, string> = {
   RSD: 'RSD', EUR: '\u20ac', USD: '$', CHF: 'CHF', GBP: '\u00a3', JPY: '\u00a5', CAD: 'C$', AUD: 'A$',
 };
-
-function formatBalance(amount: number | null | undefined, currency: string): string {
-  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
-  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
-}
-
-function formatAccountNumber(accountNumber: string | null | undefined): string {
-  if (!accountNumber) return '-';
-  if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
-}
 
 function formatDateGroup(dateStr: string): string {
   const date = new Date(dateStr);

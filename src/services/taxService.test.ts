@@ -61,34 +61,6 @@ describe('taxService', () => {
     });
   });
 
-  // ==================== getMyTaxRecord ====================
-
-  describe('getMyTaxRecord', () => {
-    it('should fetch my tax record', async () => {
-      const record = {
-        id: 1,
-        userId: 10,
-        userName: 'Marko Petrovic',
-        userType: 'CLIENT',
-        totalProfit: 50000,
-        taxOwed: 7500,
-        taxPaid: 5000,
-        currency: 'RSD',
-      };
-      mockedApi.get.mockResolvedValue({ data: record });
-
-      const result = await taxService.getMyTaxRecord();
-
-      expect(mockedApi.get).toHaveBeenCalledWith('/tax/my');
-      expect(result).toEqual(record);
-    });
-
-    it('should propagate errors', async () => {
-      mockedApi.get.mockRejectedValue(new Error('Unauthorized'));
-      await expect(taxService.getMyTaxRecord()).rejects.toThrow('Unauthorized');
-    });
-  });
-
   // ==================== triggerCalculation ====================
 
   describe('triggerCalculation', () => {

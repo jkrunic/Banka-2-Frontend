@@ -3,6 +3,7 @@ import type { AuthUser, LoginRequest } from '../types';
 import { authService } from '../services/authService';
 import { Permission } from '../types';
 import { decodeJwt } from '../utils/jwt';
+import { employeeService } from '../services/employeeService';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -12,6 +13,8 @@ interface AuthContextType {
   logout: () => void;
   hasPermission: (permission: Permission) => boolean;
   isAdmin: boolean;
+  isSupervisor: boolean;
+  isAgent: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,21 +47,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Neispravan token');
     }
 
-    const permissions: Permission[] = [];
-    if (payload.role === 'ADMIN' || payload.role === 'EMPLOYEE') {
-      permissions.push(Permission.ADMIN);
-    }
-
     const emailName = payload.sub.split('@')[0];
     const nameParts = emailName.split('.');
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+    let permissions: Permission[] = [];
+    let employeeId = 0;
+    let firstName = nameParts[0] ? capitalize(nameParts[0]) : '';
+    let lastName = nameParts[1] ? capitalize(nameParts[1]) : '';
+
+    // For ADMIN role, always include ADMIN permission
+    if (payload.role === 'ADMIN') {
+      permissions.push(Permission.ADMIN);
+    }
+
+    // For employees (ADMIN or EMPLOYEE role), fetch real permissions from backend
+    if (payload.role === 'ADMIN' || payload.role === 'EMPLOYEE') {
+      try {
+        const employeesResponse = await employeeService.getAll({ email: payload.sub, page: 0, limit: 1 });
+        const employees = employeesResponse.content;
+        if (employees.length > 0) {
+          const emp = employees[0];
+          permissions = (emp.permissions ?? []) as Permission[];
+          employeeId = emp.id;
+          firstName = emp.firstName || firstName;
+          lastName = emp.lastName || lastName;
+          // Admins always have ADMIN permission even if not in backend list
+          if (payload.role === 'ADMIN' && !permissions.includes(Permission.ADMIN)) {
+            permissions.push(Permission.ADMIN);
+          }
+        }
+      } catch {
+        // If fetching fails, fallback: only ADMIN role gets ADMIN permission
+        if (payload.role === 'ADMIN') {
+          permissions = [Permission.ADMIN];
+        }
+      }
+    }
+
     const authUser: AuthUser = {
-      id: 0,
+      id: employeeId,
       email: payload.sub,
       username: emailName,
-      firstName: nameParts[0] ? capitalize(nameParts[0]) : '',
-      lastName: nameParts[1] ? capitalize(nameParts[1]) : '',
+      firstName,
+      lastName,
       role: payload.role,
       permissions,
     };
@@ -79,8 +111,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = !!(
     (Array.isArray(user?.permissions) && user.permissions.includes(Permission.ADMIN)) ||
-    user?.role === 'ADMIN' ||
-    user?.role === 'EMPLOYEE'
+    user?.role === 'ADMIN'
+  );
+
+  const isSupervisor = !!(
+    isAdmin ||
+    (Array.isArray(user?.permissions) && user.permissions.includes(Permission.SUPERVISOR))
+  );
+
+  const isAgent = !!(
+    Array.isArray(user?.permissions) && user.permissions.includes(Permission.AGENT)
   );
 
   return (
@@ -93,6 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         hasPermission,
         isAdmin,
+        isSupervisor,
+        isAgent,
       }}
     >
       {children}

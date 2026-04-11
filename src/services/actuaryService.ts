@@ -20,15 +20,6 @@ const actuaryService = {
   },
 
   /**
-   * GET /actuaries/{employeeId}
-   * Aktuarski podaci za zaposlenog.
-   */
-  getInfo: async (employeeId: number): Promise<ActuaryInfo> => {
-    const response = await api.get(`/actuaries/${employeeId}`);
-    return response.data;
-  },
-
-  /**
    * PATCH /actuaries/{employeeId}/limit
    * Promena limita i needApproval za agenta.
    */

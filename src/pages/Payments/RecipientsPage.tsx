@@ -15,10 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, UserPlus, Search, Pencil, Trash2, X, Check } from 'lucide-react';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray } from '@/utils/formatters';
 
 function normalizeValue(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();

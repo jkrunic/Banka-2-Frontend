@@ -30,10 +30,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray, formatAmount, formatDate } from '@/utils/formatters';
 
 function statusBadgeVariant(status: Loan['status']): 'success' | 'warning' | 'info' | 'destructive' | 'secondary' {
   if (status === 'ACTIVE') return 'success';
@@ -61,17 +58,6 @@ function statusLabel(status: Loan['status']): string {
   if (status === 'REJECTED') return 'Odbijen';
   if (status === 'CLOSED') return 'Zatvoren';
   return status;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('sr-RS');
 }
 
 export default function LoanListPage() {

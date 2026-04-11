@@ -203,7 +203,7 @@ export interface Exchange {
 
 // --- Opcije ---
 
-export interface OptionItem {
+interface OptionItem {
   id: number;
   strikePrice: number;
   bid: number;

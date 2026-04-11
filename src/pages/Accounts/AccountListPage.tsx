@@ -1,6 +1,3 @@
-// FE2-02a: Lista svih racuna korisnika
-// FE2-02b: Prikaz transakcija za selektovani racun
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/lib/notify';
@@ -43,6 +40,7 @@ import {
 import { DateInput } from '@/components/ui/date-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatDate, formatBalance, formatAccountNumber } from '@/utils/formatters';
 
 const accountTypeLabels: Record<string, string> = {
   TEKUCI: 'Tekuci',
@@ -81,22 +79,6 @@ const transactionStatusVariant: Record<string, 'warning' | 'success' | 'destruct
   REJECTED: 'destructive',
   CANCELLED: 'secondary',
 };
-
-function formatBalance(amount: number | null | undefined, currency: string): string {
-  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
-  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
-}
-
-function formatAccountNumber(accountNumber: string | null | undefined): string {
-  if (!accountNumber) return '-';
-  if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
 
 function normalizeAccountType(raw: string | undefined): AccountType {
   switch (raw) {

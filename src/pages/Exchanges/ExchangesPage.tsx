@@ -17,7 +17,8 @@ import exchangeManagementService from '@/services/exchangeManagementService';
 import type { Exchange } from '@/types/celina3';
 
 export default function ExchangesPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSupervisor } = useAuth();
+  const canManage = isAdmin || isSupervisor;
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -49,11 +50,30 @@ export default function ExchangesPage() {
     setTogglingAcronym(acronym);
     try {
       await exchangeManagementService.setTestMode(acronym, !currentValue);
-      setExchanges((prev) =>
-        prev.map((e) =>
-          e.acronym === acronym ? { ...e, testMode: !currentValue } : e
-        )
-      );
+      // Re-fetch exchange data to get updated isOpen status from backend
+      try {
+        const updatedExchange = await exchangeManagementService.getByAcronym(acronym);
+        setExchanges((prev) =>
+          prev.map((e) =>
+            e.acronym === acronym ? { ...e, ...updatedExchange, testMode: !currentValue } : e
+          )
+        );
+      } catch {
+        // Fallback: just update testMode and set open when test mode is on
+        setExchanges((prev) =>
+          prev.map((e) =>
+            e.acronym === acronym
+              ? {
+                  ...e,
+                  testMode: !currentValue,
+                  currentlyOpen: !currentValue ? true : e.currentlyOpen,
+                  isCurrentlyOpen: !currentValue ? true : e.isCurrentlyOpen,
+                  isOpen: !currentValue ? true : e.isOpen,
+                }
+              : e
+          )
+        );
+      }
       toast.success(`Test mod ${!currentValue ? 'ukljucen' : 'iskljucen'} za ${acronym}`);
     } catch {
       toast.error('Neuspesna promena test moda.');
@@ -132,7 +152,7 @@ export default function ExchangesPage() {
                   <TableHead>Valuta</TableHead>
                   <TableHead>Radno vreme</TableHead>
                   <TableHead>Status</TableHead>
-                  {isAdmin && <TableHead>Test Mode</TableHead>}
+                  {canManage && <TableHead>Test Mode</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -174,7 +194,7 @@ export default function ExchangesPage() {
                         )}
                       </div>
                     </TableCell>
-                    {isAdmin && (
+                    {canManage && (
                       <TableCell>
                         <Switch
                           checked={exchange.testMode ?? false}

@@ -67,25 +67,6 @@ describe('paymentRecipientService', () => {
     });
   });
 
-  // ==================== getById ====================
-
-  describe('getById', () => {
-    it('should fetch recipient by id', async () => {
-      const recipient = { id: 5, name: 'Elena', accountNumber: '333333333333333333' };
-      mockedApi.get.mockResolvedValue({ data: recipient });
-
-      const result = await paymentRecipientService.getById(5);
-
-      expect(mockedApi.get).toHaveBeenCalledWith('/payment-recipients/5');
-      expect(result).toEqual(recipient);
-    });
-
-    it('should propagate errors', async () => {
-      mockedApi.get.mockRejectedValue(new Error('Not found'));
-      await expect(paymentRecipientService.getById(999)).rejects.toThrow('Not found');
-    });
-  });
-
   // ==================== create ====================
 
   describe('create', () => {

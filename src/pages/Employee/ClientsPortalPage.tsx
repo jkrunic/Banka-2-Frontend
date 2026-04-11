@@ -33,16 +33,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+import { asArray, formatAmount } from '@/utils/formatters';
+
 const PAGE_SIZE = 10;
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : (0).toFixed(decimals);
-}
 
 function getErrorMessage(defaultMessage: string, error: unknown): string {
   if (

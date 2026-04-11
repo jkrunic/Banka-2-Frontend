@@ -1,33 +1,8 @@
 /**
  * Shared test helpers and mock factories for Celina 2 page tests.
  */
-import type { ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Account, Transaction, PaymentRecipient, ExchangeRate, Loan, LoanRequest, Installment } from '@/types/celina2';
 import type { Card as BankCard } from '@/types/celina2';
-
-// ---------- Router wrapper ----------
-
-export function renderWithRouter(ui: ReactNode, { route = '/' }: { route?: string } = {}) {
-  return (
-    <MemoryRouter initialEntries={[route]}>
-      {ui}
-    </MemoryRouter>
-  );
-}
-
-export function renderWithRouteParams(
-  ui: ReactNode,
-  { route, path }: { route: string; path: string }
-) {
-  return (
-    <MemoryRouter initialEntries={[route]}>
-      <Routes>
-        <Route path={path} element={ui} />
-      </Routes>
-    </MemoryRouter>
-  );
-}
 
 // ---------- Mock data factories ----------
 

@@ -15,15 +15,6 @@ const taxService = {
   },
 
   /**
-   * GET /tax/my
-   * Vraca poreski zapis za autentifikovanog korisnika.
-   */
-  getMyTaxRecord: async (): Promise<TaxRecord> => {
-    const response = await api.get('/tax/my');
-    return response.data;
-  },
-
-  /**
    * POST /tax/calculate
    * Pokreni obracun poreza za tekuci mesec.
    */

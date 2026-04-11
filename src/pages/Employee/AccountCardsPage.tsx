@@ -19,9 +19,9 @@ import { toast } from '@/lib/notify';
 import { accountService } from '@/services/accountService';
 import { cardService } from '@/services/cardService';
 import type { Account, CardType, Card as BankCard } from '@/types/celina2';
+import { formatDate, formatBalance, formatAccountNumber } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -60,21 +60,6 @@ const cardTypeGradients: Record<string, string> = {
 
 function maskCardNumber(number: string): string {
   return `**** **** **** ${number.slice(-4)}`;
-}
-
-function formatBalance(amount: number, currency: string): string {
-  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
-  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
-}
-
-function formatAccountNumber(accountNumber: string): string {
-  if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export default function AccountCardsPage() {

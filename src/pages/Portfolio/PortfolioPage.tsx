@@ -19,6 +19,7 @@ import portfolioService from '@/services/portfolioService';
 import listingService from '@/services/listingService';
 import { toast } from '@/lib/notify';
 import type { PortfolioItem, PortfolioSummary } from '@/types/celina3';
+import { formatAmount, formatDateTime } from '@/utils/formatters';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,34 +35,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-function formatAmount(value: number | null | undefined, fractionDigits = 2): string {
-  const num = typeof value === 'number' ? value : Number(value) || 0;
-  return num.toLocaleString('sr-RS', {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  });
-}
-
 function formatPercent(value: number | null | undefined): string {
   const num = typeof value === 'number' ? value : Number(value) || 0;
   return `${num.toLocaleString('sr-RS', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}%`;
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-
-  return date.toLocaleDateString('sr-RS', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function getListingTypeLabel(type: PortfolioItem['listingType']): string {

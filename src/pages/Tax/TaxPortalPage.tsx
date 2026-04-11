@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { formatAmount } from '@/utils/formatters';
 import {
   Table,
   TableBody,
@@ -20,13 +21,6 @@ import {
 } from '@/components/ui/table';
 
 type UserTypeFilter = 'ALL' | 'CLIENT' | 'EMPLOYEE';
-
-function formatAmount(value: number): string {
-  return value.toLocaleString('sr-RS', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function mapTypeLabel(userType: string): string {
   if (userType === 'CLIENT') {

@@ -30,31 +30,14 @@ import listingService from '@/services/listingService';
 import taxService from '@/services/taxService';
 
 import type { Order, ActuaryInfo } from '@/types/celina3';
+import { formatAmount, formatDate } from '@/utils/formatters';
 
 /* ---------- helpers ---------- */
 
-function formatVolume(value: number): string {
+function formatVolumeCompact(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString('sr-RS');
-}
-
-function formatAmount(value: number): string {
-  return value.toLocaleString('sr-RS', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('sr-RS', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }
 
 function statusBadgeVariant(
@@ -147,7 +130,7 @@ export default function SupervisorDashboardPage() {
         // 2: Volume
         listingService.getAll('STOCK', '', 0, 100).then((res) => {
           const total = res.content.reduce((sum, l) => sum + (l.volume ?? 0), 0);
-          setDailyVolume(formatVolume(total));
+          setDailyVolume(formatVolumeCompact(total));
         }),
 
         // 3: Tax

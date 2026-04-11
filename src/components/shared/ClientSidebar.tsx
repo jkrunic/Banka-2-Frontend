@@ -45,13 +45,9 @@ interface SidebarItem {
 }
 
 export default function ClientSidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin, isSupervisor } = useAuth();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
-
-  const permissions = Array.isArray((user as { permissions?: unknown[] } | null)?.permissions)
-    ? ((user as { permissions?: string[] } | null)?.permissions ?? [])
-    : [];
 
   const role = String(
     (user as { role?: string; userType?: string } | null)?.role ??
@@ -60,8 +56,7 @@ export default function ClientSidebar() {
   ).toUpperCase();
 
   const isEmployeeOrAdmin =
-    permissions.includes('ADMIN') ||
-    permissions.includes('EMPLOYEE') ||
+    isAdmin ||
     role === 'ADMIN' ||
     role === 'EMPLOYEE';
 
@@ -73,7 +68,10 @@ export default function ClientSidebar() {
   };
 
   const getRoleName = () => {
-    if (role === 'ADMIN') return 'Administrator';
+    if (isAdmin) return 'Administrator';
+    if (isSupervisor) return 'Supervizor';
+    const perms = Array.isArray(user?.permissions) ? user.permissions : [];
+    if (perms.includes('AGENT')) return 'Agent';
     if (role === 'EMPLOYEE') return 'Zaposleni';
     return 'Klijent';
   };
@@ -104,22 +102,42 @@ export default function ClientSidebar() {
   );
 
   const employeeLinks: SidebarItem[] = useMemo(
-    () => [
-      { label: 'Dashboard', path: '/employee/dashboard', icon: <TrendingUp className="h-4 w-4" /> },
-      { label: 'Zaposleni', path: '/admin/employees', icon: <Users className="h-4 w-4" /> },
-      { label: 'Portal racuna', path: '/employee/accounts', icon: <Building2 className="h-4 w-4" /> },
-      { label: 'Zahtevi za racune', path: '/employee/account-requests', icon: <Wallet className="h-4 w-4" /> },
-      { label: 'Portal kartica', path: '/employee/cards', icon: <CreditCard className="h-4 w-4" /> },
-      { label: 'Zahtevi za kartice', path: '/employee/card-requests', icon: <CreditCard className="h-4 w-4" /> },
-      { label: 'Portal klijenata', path: '/employee/clients', icon: <Users className="h-4 w-4" /> },
-      { label: 'Zahtevi za kredit', path: '/employee/loan-requests', icon: <ShieldCheck className="h-4 w-4" /> },
-      { label: 'Svi krediti', path: '/employee/loans', icon: <FileText className="h-4 w-4" /> },
-      { label: 'Orderi', path: '/employee/orders', icon: <ShoppingCart className="h-4 w-4" /> },
-      { label: 'Aktuari', path: '/employee/actuaries', icon: <TrendingUp className="h-4 w-4" /> },
-      { label: 'Porez', path: '/employee/tax', icon: <Calculator className="h-4 w-4" /> },
-      { label: 'Berze', path: '/employee/exchanges', icon: <Globe className="h-4 w-4" /> },
-    ],
-    []
+    () => {
+      const links: SidebarItem[] = [
+        { label: 'Dashboard', path: '/employee/dashboard', icon: <TrendingUp className="h-4 w-4" /> },
+      ];
+
+      // Admin-only links
+      if (isAdmin) {
+        links.push({ label: 'Zaposleni', path: '/admin/employees', icon: <Users className="h-4 w-4" /> });
+      }
+
+      // All employees can see these
+      links.push(
+        { label: 'Portal racuna', path: '/employee/accounts', icon: <Building2 className="h-4 w-4" /> },
+        { label: 'Zahtevi za racune', path: '/employee/account-requests', icon: <Wallet className="h-4 w-4" /> },
+        { label: 'Portal kartica', path: '/employee/cards', icon: <CreditCard className="h-4 w-4" /> },
+        { label: 'Zahtevi za kartice', path: '/employee/card-requests', icon: <CreditCard className="h-4 w-4" /> },
+        { label: 'Portal klijenata', path: '/employee/clients', icon: <Users className="h-4 w-4" /> },
+        { label: 'Zahtevi za kredit', path: '/employee/loan-requests', icon: <ShieldCheck className="h-4 w-4" /> },
+        { label: 'Svi krediti', path: '/employee/loans', icon: <FileText className="h-4 w-4" /> },
+      );
+
+      // Supervisor-only links (admin is also supervisor per spec)
+      if (isSupervisor) {
+        links.push(
+          { label: 'Orderi', path: '/employee/orders', icon: <ShoppingCart className="h-4 w-4" /> },
+          { label: 'Aktuari', path: '/employee/actuaries', icon: <TrendingUp className="h-4 w-4" /> },
+          { label: 'Porez', path: '/employee/tax', icon: <Calculator className="h-4 w-4" /> },
+        );
+      }
+
+      // All employees can see exchanges
+      links.push({ label: 'Berze', path: '/employee/exchanges', icon: <Globe className="h-4 w-4" /> });
+
+      return links;
+    },
+    [isAdmin, isSupervisor]
   );
 
   const linkClassName = ({ isActive }: { isActive: boolean }) =>

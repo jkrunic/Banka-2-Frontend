@@ -5,7 +5,6 @@ import type {
   NewPaymentRequest,
   TransferRequest,
   TransactionFilters,
-  VerificationRequest,
 } from '../types/celina2';
 import type { PaginatedResponse } from '../types';
 
@@ -52,11 +51,6 @@ export const transactionService = {
 
   requestOtpViaEmail: async (): Promise<{ sent: boolean; message: string }> => {
     const response = await api.post<{ sent: boolean; message: string }>('/payments/request-otp-email');
-    return response.data;
-  },
-
-  verifyPayment: async (data: VerificationRequest): Promise<{ verified: boolean; blocked?: boolean; message: string }> => {
-    const response = await api.post<{ verified: boolean; blocked?: boolean; message: string }>('/payments/verify', data);
     return response.data;
   },
 

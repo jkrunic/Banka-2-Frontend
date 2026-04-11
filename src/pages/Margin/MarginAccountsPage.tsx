@@ -19,14 +19,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/lib/notify';
 import marginService from '@/services/marginService';
 import type { MarginAccount, MarginTransaction } from '@/services/marginService';
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return new Intl.NumberFormat('sr-RS', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(Number.isFinite(num) ? num : 0);
-}
+import { formatAmount } from '@/utils/formatters';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (

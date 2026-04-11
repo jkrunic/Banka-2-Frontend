@@ -88,12 +88,15 @@ export default function App() {
           <Route path="/loans/apply" element={<LoanApplicationPage />} />
           <Route path="/margin-accounts" element={<MarginAccountsPage />} />
 
-          {/* Admin/Employee rute */}
+          {/* Admin-only rute */}
           <Route element={<ProtectedRoute adminOnly />}>
             <Route path="/admin/employees" element={<EmployeeListPage />} />
             <Route path="/admin/employees/new" element={<EmployeeCreatePage />} />
             <Route path="/admin/employees/:id" element={<EmployeeEditPage />} />
+          </Route>
 
+          {/* Employee portal rute (svi zaposleni - ADMIN i EMPLOYEE role) */}
+          <Route element={<ProtectedRoute employeeOnly />}>
             <Route path="/employee/dashboard" element={<SupervisorDashboardPage />} />
             <Route path="/employee/accounts" element={<AccountsPortalPage />} />
             <Route path="/employee/accounts/new" element={<CreateAccountPage />} />

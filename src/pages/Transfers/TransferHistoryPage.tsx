@@ -9,27 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Repeat, Inbox } from 'lucide-react';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray, formatAmount, formatDateTime } from '@/utils/formatters';
 
 function statusBadgeVariant(status: string) {
   if (status === 'COMPLETED') return 'success' as const;
   if (status === 'PENDING') return 'warning' as const;
   if (status === 'REJECTED') return 'destructive' as const;
   return 'secondary' as const;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('sr-RS');
 }
 
 export default function TransferHistoryPage() {

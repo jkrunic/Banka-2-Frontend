@@ -16,15 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeftRight, Wallet, ArrowRight } from 'lucide-react';
 import VerificationModal from '@/components/shared/VerificationModal';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
+import { asArray, formatAmount } from '@/utils/formatters';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (

@@ -71,35 +71,6 @@ describe('actuaryService', () => {
     });
   });
 
-  // ==================== getInfo ====================
-
-  describe('getInfo', () => {
-    it('should fetch actuary info by employee id', async () => {
-      const info = {
-        id: 1,
-        employeeId: 10,
-        employeeName: 'Agent 1',
-        employeeEmail: 'agent1@banka.rs',
-        employeePosition: 'Agent',
-        actuaryType: 'AGENT',
-        dailyLimit: 100000,
-        usedLimit: 50000,
-        needApproval: false,
-      };
-      mockedApi.get.mockResolvedValue({ data: info });
-
-      const result = await actuaryService.getInfo(10);
-
-      expect(mockedApi.get).toHaveBeenCalledWith('/actuaries/10');
-      expect(result).toEqual(info);
-    });
-
-    it('should propagate errors', async () => {
-      mockedApi.get.mockRejectedValue(new Error('Not found'));
-      await expect(actuaryService.getInfo(999)).rejects.toThrow('Not found');
-    });
-  });
-
   // ==================== updateLimit ====================
 
   describe('updateLimit', () => {

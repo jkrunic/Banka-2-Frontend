@@ -17,10 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { creditService } from '@/services/creditService';
 import type { LoanRequest, LoanStatus } from '@/types/celina2';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray, formatAmount, formatDate } from '@/utils/formatters';
 
 type StatusFilter = LoanStatus | 'ALL';
 
@@ -43,17 +40,6 @@ function statusLabel(status: LoanStatus): string {
   if (status === 'PAID_OFF') return 'Prevremeno otplacen';
   if (status === 'LATE') return 'Kasnjenje';
   return status;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : (0).toFixed(decimals);
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('sr-RS');
 }
 
 function statusBorderColor(status: LoanStatus): string {

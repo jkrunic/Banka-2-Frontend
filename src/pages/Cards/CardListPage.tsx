@@ -1,17 +1,3 @@
-// Ova stranica prikazuje sve kartice ulogovanog korisnika.
-// - cardService.getMyCards() za fetch
-// - Kartice prikazati vizuelno (card-like UI sa brojem, tipom, statusom)
-// - Akcije: blokiraj, deblokiraj, deaktiviraj, promeni limit
-// - Maskiran broj kartice (**** **** **** 1234)
-// - Zahtev za novu karticu: cardService.create({ accountNumber, cardType })
-//   => email verifikacija (cardService.requestCardVerification)
-// - Tipovi kartica: VISA, MASTERCARD, DINACARD, AMERICAN_EXPRESS
-// - Za poslovni racun: kartica se pravi za ovlasceno lice (AuthorizedPerson)
-//   => cardService.getAuthorizedPersons(accountNumber) za dropdown
-// - Max kartice: 2 po licnom racunu, 1 po ovlascenom licu za poslovni
-// - Spec: "Kartice" iz Celine 2
-// - Luhn validacija za prikaz (16 cifara)
-
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { toast } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';

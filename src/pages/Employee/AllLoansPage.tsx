@@ -1,7 +1,3 @@
-//
-// Ova stranica je dostupna samo zaposlenima.
-// Prikazuje sve kredite u bankarskom sistemu sa filterima.
-
 import { useEffect, useState, useMemo } from 'react';
 import {
   FileText,
@@ -34,10 +30,7 @@ import {
 } from '@/components/ui/select';
 import { creditService } from '@/services/creditService';
 import type { Loan, LoanStatus, LoanType } from '@/types/celina2';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray, formatAmount, formatDate } from '@/utils/formatters';
 
 function statusBadgeVariant(status: LoanStatus): 'success' | 'warning' | 'info' | 'destructive' | 'secondary' {
   if (status === 'ACTIVE') return 'success';
@@ -70,19 +63,6 @@ function statusLabel(status: LoanStatus): string {
   if (status === 'LATE') return 'Kasnjenje';
   if (status === 'CLOSED') return 'Zatvoren';
   return status;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num)
-    ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-    : (0).toFixed(decimals);
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('sr-RS');
 }
 
 export default function AllLoansPage() {

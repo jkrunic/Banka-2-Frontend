@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { formatDate, formatBalance, formatAccountNumber } from '@/utils/formatters';
 import {
   Table,
   TableBody,
@@ -57,21 +58,6 @@ const txStatusVariant: Record<string, 'warning' | 'success' | 'destructive' | 's
   REJECTED: 'destructive',
   CANCELLED: 'secondary',
 };
-
-function formatBalance(amount: number, currency: string): string {
-  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
-  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
-}
-
-function formatAccountNumber(accountNumber: string): string {
-  if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
 
 export default function BusinessAccountDetailsPage() {
   const navigate = useNavigate();

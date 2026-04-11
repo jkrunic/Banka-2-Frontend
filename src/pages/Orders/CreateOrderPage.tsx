@@ -30,6 +30,7 @@ import orderService from '@/services/orderService';
 import { Permission } from '@/types';
 import type { Account } from '@/types/celina2';
 import { ListingType, OrderDirection, OrderType, type Listing } from '@/types/celina3';
+import { asArray, formatAmount } from '@/utils/formatters';
 
 const selectClassName =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -114,20 +115,6 @@ const createOrderSchema = z
 type CreateOrderFormInput = z.input<typeof createOrderSchema>;
 type CreateOrderFormValues = z.output<typeof createOrderSchema>;
 
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-
-  return new Intl.NumberFormat('sr-RS', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(Number.isFinite(num) ? num : 0);
-}
-
 function getErrorMessage(error: unknown, fallback: string): string {
   if (
     typeof error === 'object' &&
@@ -198,7 +185,9 @@ function getPriceSourceLabel(orderType: OrderType, direction: OrderDirection): s
   return 'Limit vrednost';
 }
 
-function getCommission(orderType: OrderType, approximatePrice: number): number {
+function getCommission(orderType: OrderType, approximatePrice: number, isEmployee: boolean = false): number {
+  // Employees/actuaries trade from bank accounts — commission goes to bank (i.e. no net commission)
+  if (isEmployee) return 0;
   if (approximatePrice <= 0) return 0;
 
   // Spec: Market/Stop → min(14% * price, $7), Limit/StopLimit → min(24% * price, $12)
@@ -239,8 +228,8 @@ function getPricingCurrency(listing: Listing | null): string {
   return getDefaultCurrencyForListing(listing);
 }
 
-function getListingTypesToLoad(isAdmin: boolean): ListingType[] {
-  return isAdmin
+function getListingTypesToLoad(isEmployee: boolean): ListingType[] {
+  return isEmployee
     ? [ListingType.STOCK, ListingType.FUTURES, ListingType.FOREX]
     : [ListingType.STOCK, ListingType.FUTURES];
 }
@@ -266,7 +255,8 @@ function buildCreateOrderPayload(
 export default function CreateOrderPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { hasPermission, isAdmin } = useAuth();
+  const { hasPermission, isAdmin, user } = useAuth();
+  const isEmployeeRole = user?.role === 'ADMIN' || user?.role === 'EMPLOYEE';
 
   const requestedListingIdParam = searchParams.get('listingId');
   const requestedListingId = requestedListingIdParam ? Number(requestedListingIdParam) : Number.NaN;
@@ -337,7 +327,7 @@ export default function CreateOrderPage() {
 
       try {
         const listingResponses = await Promise.all(
-          getListingTypesToLoad(isAdmin).map((type) =>
+          getListingTypesToLoad(isEmployeeRole).map((type) =>
             listingService
               .getAll(type, '', 0, 100)
               .then((response) => asArray<Listing>(response.content))
@@ -390,7 +380,7 @@ export default function CreateOrderPage() {
       setIsLoadingAccounts(true);
 
       try {
-        const nextAccounts = isAdmin
+        const nextAccounts = isEmployeeRole
           ? asArray<Account>((await accountService.getAll({ page: 0, limit: 100 })).content)
           : asArray<Account>(await accountService.getMyAccounts());
 
@@ -417,7 +407,7 @@ export default function CreateOrderPage() {
     return () => {
       mounted = false;
     };
-  }, [isAdmin, requestedListingId]);
+  }, [isAdmin, isEmployeeRole, requestedListingId]);
 
   useEffect(() => {
     if (!listings.length) return;
@@ -520,7 +510,7 @@ export default function CreateOrderPage() {
   );
 
   const approximatePrice = contractSize * pricePerUnit * safeQuantity;
-  const commission = getCommission(orderType, approximatePrice);
+  const commission = getCommission(orderType, approximatePrice, isEmployeeRole);
   const totalAmount = approximatePrice + commission;
   const pricingCurrency = getPricingCurrency(selectedListing);
 
@@ -580,7 +570,7 @@ export default function CreateOrderPage() {
     : 0;
 
   const confirmationCommission = pendingOrder
-    ? getCommission(pendingOrder.orderType, confirmationApproximatePrice)
+    ? getCommission(pendingOrder.orderType, confirmationApproximatePrice, isEmployeeRole)
     : 0;
 
   const confirmationTotal = confirmationApproximatePrice + confirmationCommission;
@@ -980,7 +970,9 @@ export default function CreateOrderPage() {
                       <TriangleAlert className="h-4 w-4" />
                       <AlertTitle>Berza zatvorena</AlertTitle>
                       <AlertDescription>
-                        Berza {exchangeApiOpen.name} je trenutno zatvorena. Order ce biti izvrsen kada se berza otvori.
+                        Berza {exchangeApiOpen.name} je trenutno zatvorena. Order ce biti kreiran, ali ce se izvrsavati sporije
+                        — svaki deo naloga ce zahtevati dodatno vreme za ispunjenje (npr. +30 min po delu).
+                        Izvrsenje ce poceti kada se berza otvori.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -1027,6 +1019,7 @@ export default function CreateOrderPage() {
                   <AlertDescription>
                     Izvršenje naloga će čekati sledeći trgovinski prozor za{' '}
                     {exchangeApiOpen.name || selectedListing?.exchangeAcronym || 'izabranu berzu'}.
+                    Svaki deo naloga će se izvršavati uz dodatno čekanje od ~30 minuta.
                   </AlertDescription>
                 </Alert>
               )}

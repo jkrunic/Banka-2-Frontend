@@ -16,6 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { toast } from '@/lib/notify';
+import { formatBalance, formatAccountNumber } from '@/utils/formatters';
 import { accountService } from '@/services/accountService';
 import type { Account, AccountStatus, AccountType } from '@/types/celina2';
 import { Button } from '@/components/ui/button';
@@ -61,16 +62,6 @@ const statusDotColors: Record<string, string> = {
   BLOCKED: 'bg-red-500',
   INACTIVE: 'bg-gray-400 dark:bg-gray-500',
 };
-
-function formatBalance(amount: number, currency: string): string {
-  const n = typeof amount === 'number' ? amount : Number(amount) || 0;
-  return `${n.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`;
-}
-
-function formatAccountNumber(accountNumber: string): string {
-  if (accountNumber.length !== 18) return accountNumber;
-  return `${accountNumber.slice(0, 3)}-${accountNumber.slice(3, 16)}-${accountNumber.slice(16)}`;
-}
 
 const normalizeAccountType = (raw: string | undefined): AccountType => {
   switch (raw) {

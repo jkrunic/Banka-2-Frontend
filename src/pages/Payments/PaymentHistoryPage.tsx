@@ -8,13 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { History, Inbox, ArrowUpRight, ArrowDownLeft, TrendingDown, TrendingUp, Receipt, ChevronDown, ChevronUp, Download, X, Search } from 'lucide-react';
+import { asArray, formatAmount, formatDateTime, formatDateShort } from '@/utils/formatters';
 
 type SortField = 'date' | 'amount' | 'status';
 type SortDirection = 'asc' | 'desc';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
 
 function statusBadgeVariant(status: TransactionStatus) {
   if (status === 'COMPLETED') return 'success' as const;
@@ -29,24 +26,6 @@ function statusLabel(status: TransactionStatus): string {
   if (status === 'REJECTED') return 'Odbijeno';
   if (status === 'CANCELLED') return 'Otkazano';
   return status;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : (0).toFixed(decimals);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('sr-RS');
-}
-
-function formatDateShort(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('sr-RS', { day: '2-digit', month: 'short' });
 }
 
 function getTimestamp(value: string | null | undefined): number {

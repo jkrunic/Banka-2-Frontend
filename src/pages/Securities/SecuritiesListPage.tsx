@@ -13,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
-  Zap,
   ArrowUpRight,
   ArrowDownRight,
   SlidersHorizontal,
@@ -21,6 +20,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import type { Listing, PaginatedResponse } from '@/types/celina3';
 import listingService from '@/services/listingService';
+import { formatPrice } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,12 +50,7 @@ const TAB_ICONS: Record<ListingTab, string> = {
 
 const PAGE_SIZE = 20;
 
-function formatPrice(price: number | null | undefined): string {
-  if (price == null) return '-';
-  return price.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatVolume(vol: number | null | undefined): string {
+function formatVolumeCompact(vol: number | null | undefined): string {
   if (vol == null) return '-';
   if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
   if (vol >= 1_000) return `${(vol / 1_000).toFixed(1)}K`;
@@ -102,7 +97,7 @@ function VolumeBar({ volume, maxVolume }: { volume: number; maxVolume: number })
   const pct = maxVolume > 0 ? Math.min((volume / maxVolume) * 100, 100) : 0;
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-xs tabular-nums">{formatVolume(volume)}</span>
+      <span className="font-mono text-xs tabular-nums">{formatVolumeCompact(volume)}</span>
       <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div
           className="h-full bg-indigo-500/40 rounded-full transition-all"
@@ -115,8 +110,8 @@ function VolumeBar({ volume, maxVolume }: { volume: number; maxVolume: number })
 
 export default function SecuritiesListPage() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
-  const isClient = !isAdmin;
+  const { user } = useAuth();
+  const isClient = user?.role === 'CLIENT';
 
   const [activeTab, setActiveTab] = useState<ListingTab>('STOCK');
   const [search, setSearch] = useState('');
@@ -147,13 +142,20 @@ export default function SecuritiesListPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Debounce advanced filters
+  // Debounce advanced filters - use JSON key to avoid unnecessary re-renders
+  const filtersKey = `${exchangePrefix}|${priceMin}|${priceMax}|${settlementDateFrom}|${settlementDateTo}`;
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedFilters({
-      exchangePrefix, priceMin, priceMax, settlementDateFrom, settlementDateTo,
+    const timer = setTimeout(() => setDebouncedFilters((prev) => {
+      const next = { exchangePrefix, priceMin, priceMax, settlementDateFrom, settlementDateTo };
+      // Only update if values actually changed
+      if (prev.exchangePrefix === next.exchangePrefix && prev.priceMin === next.priceMin &&
+          prev.priceMax === next.priceMax && prev.settlementDateFrom === next.settlementDateFrom &&
+          prev.settlementDateTo === next.settlementDateTo) return prev;
+      return next;
     }), 300);
     return () => clearTimeout(timer);
-  }, [exchangePrefix, priceMin, priceMax, settlementDateFrom, settlementDateTo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   // Reset page on tab/search/filter change
   useEffect(() => { setPage(0); }, [activeTab, debouncedSearch, debouncedFilters]);
@@ -201,6 +203,14 @@ export default function SecuritiesListPage() {
 
   const tabs: ListingTab[] = isClient ? ['STOCK', 'FUTURES'] : ['STOCK', 'FUTURES', 'FOREX'];
   const listings = useMemo(() => data?.content ?? [], [data]);
+
+  // Detect if data looks simulated: all prices identical changePercent=0, or volume=0 for all
+  const isDataSimulated = useMemo(() => {
+    if (listings.length === 0) return false;
+    const allZeroChange = listings.every(l => (l.changePercent ?? 0) === 0 && (l.priceChange ?? 0) === 0);
+    const allZeroVolume = listings.every(l => (l.volume ?? 0) === 0);
+    return allZeroChange || allZeroVolume;
+  }, [listings]);
   const totalPages = data?.totalPages ?? 0;
 
   const overview = useMemo(() => {
@@ -325,7 +335,7 @@ export default function SecuritiesListPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ukupan promet</p>
-                  <p className="text-xl font-bold font-mono tabular-nums">{formatVolume(overview.totalVolume)}</p>
+                  <p className="text-xl font-bold font-mono tabular-nums">{formatVolumeCompact(overview.totalVolume)}</p>
                 </div>
               </div>
             </CardContent>
@@ -455,10 +465,21 @@ export default function SecuritiesListPage() {
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Zap className="h-3 w-3" />
-            <span className="font-mono">LIVE</span>
-          </div>
+          {isDataSimulated ? (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-mono text-amber-600 dark:text-amber-400 border-amber-400/40 bg-amber-500/5 gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                SIMULIRANI PODACI
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-400/40 bg-emerald-500/5 gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                LIVE
+              </Badge>
+            </div>
+          )}
         </div>
         <CardContent className="p-0">
           {loading ? (

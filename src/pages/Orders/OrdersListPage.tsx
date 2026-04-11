@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { ClipboardList, Inbox } from 'lucide-react';
 import { toast } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
@@ -6,10 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import orderService from '@/services/orderService';
 import type { Order } from '@/types/celina3';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+import { asArray, formatAmount, formatDateTime } from '@/utils/formatters';
 
 type OrderStatusValue = 'PENDING' | 'APPROVED' | 'DECLINED' | 'DONE';
 type StatusFilter = OrderStatusValue | 'ALL';
@@ -32,18 +29,6 @@ function orderTypeLabel(type: string): string {
   if (type === 'STOP') return 'Stop';
   if (type === 'STOP_LIMIT') return 'Stop-Limit';
   return type;
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num) ? num.toFixed(decimals) : (0).toFixed(decimals);
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return `${date.toLocaleDateString('sr-RS')} ${date.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function isSettlementDatePassed(order: Order): boolean {
@@ -300,6 +285,8 @@ export default function OrdersListPage() {
                   <th className="text-left py-2">Smer</th>
                   <th className="text-left py-2">Preostalo</th>
                   <th className="text-left py-2">Status</th>
+                  <th className="text-left py-2">Odobrio</th>
+                  <th className="text-left py-2">Datum</th>
                   <th className="text-left py-2">Akcije</th>
                 </tr>
               </thead>
@@ -310,7 +297,7 @@ export default function OrdersListPage() {
                   const expired = isSettlementDatePassed(order);
 
                   return (
-                    <React.Fragment key={order.id}>
+                    <Fragment key={order.id}>
                       <tr className="border-b align-top hover:bg-muted/50 transition-colors">
                         <td className="py-2">{order.userName || '-'}</td>
                         <td className="py-2">{orderTypeLabel(order.orderType)}</td>
@@ -339,6 +326,12 @@ export default function OrdersListPage() {
                             {statusLabel(order.status)}
                           </Badge>
                         </td>
+                        <td className="py-2 text-xs text-muted-foreground">
+                          {order.approvedBy || '-'}
+                        </td>
+                        <td className="py-2 text-xs font-mono text-muted-foreground">
+                          {formatDateTime(order.createdAt)}
+                        </td>
                         <td className="py-2">
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -358,14 +351,14 @@ export default function OrdersListPage() {
                                 Odobri
                               </Button>
                             )}
-                            {isPending && (
+                            {(isPending || (order.status === 'APPROVED' && !order.isDone)) && (
                               <Button
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => setConfirmAction({ id: order.id, type: 'decline' })}
                                 disabled={processingId === order.id}
                               >
-                                Odbij
+                                {isPending ? 'Odbij' : 'Otkaži'}
                               </Button>
                             )}
                           </div>
@@ -373,7 +366,7 @@ export default function OrdersListPage() {
                       </tr>
                       {isExpanded && (
                         <tr className="border-b bg-muted/30">
-                          <td className="py-3 px-2" colSpan={10}>
+                          <td className="py-3 px-2" colSpan={12}>
                             <div className="grid gap-2 md:grid-cols-3 text-sm">
                               <p>Hartija: <span className="font-medium">{order.listingName} ({order.listingTicker})</span></p>
                               <p>Tip hartije: <span className="font-medium">{order.listingType}</span></p>
@@ -401,7 +394,7 @@ export default function OrdersListPage() {
                           </td>
                         </tr>
                       )}
-                    </React.Fragment>
+                    </Fragment>
                   );
                 })}
               </tbody>

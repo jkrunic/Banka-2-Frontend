@@ -24,17 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VerificationModal from '@/components/shared/VerificationModal';
 import { SendHorizonal, Wallet, ArrowRight, User, FileText, Hash, BookUser, CheckCircle2, X } from 'lucide-react';
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function formatAmount(value: number | null | undefined, decimals = 2): string {
-  const num = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(num)
-    ? num.toLocaleString('sr-RS', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-    : (0).toFixed(decimals);
-}
+import { asArray, formatAmount } from '@/utils/formatters';
 
 export default function NewPaymentPage() {
   const navigate = useNavigate();
@@ -47,7 +37,6 @@ export default function NewPaymentPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recipients, setRecipients] = useState<PaymentRecipient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [saveRecipientPrompt, setSaveRecipientPrompt] = useState<{ name: string; accountNumber: string } | null>(null);
   const [savingRecipient, setSavingRecipient] = useState(false);
@@ -127,8 +116,6 @@ export default function NewPaymentPage() {
   }, [accounts]);
 
   const onSubmit = async () => {
-    // SAMO otvori OTP modal. Pare NE idu nigde dok se ne unese kod.
-    console.log('[PAYMENT] onSubmit called - opening OTP modal ONLY, no payment sent');
     setShowVerification(true);
   };
 
@@ -363,11 +350,10 @@ export default function NewPaymentPage() {
           <div className="flex justify-end pt-2">
             <Button
               type="submit"
-              disabled={isSubmitting}
               className="h-11 px-8 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-200"
             >
               <SendHorizonal className="h-4 w-4 mr-2" />
-              {isSubmitting ? 'Kreiranje...' : 'Nastavi na verifikaciju'}
+              Nastavi na verifikaciju
             </Button>
           </div>
         </form>

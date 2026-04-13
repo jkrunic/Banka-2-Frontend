@@ -54,6 +54,11 @@ export const transactionService = {
     return response.data;
   },
 
+  getActiveOtp: async (): Promise<{ active: boolean; code?: string; expiresInSeconds?: number; attempts?: number; maxAttempts?: number; message?: string }> => {
+    const response = await api.get('/payments/my-otp');
+    return response.data;
+  },
+
   getAll: async (filters?: TransactionFilters): Promise<PaginatedResponse<Transaction>> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);

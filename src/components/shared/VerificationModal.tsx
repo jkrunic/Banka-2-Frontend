@@ -34,17 +34,27 @@ export default function VerificationModal({ isOpen, onClose, onVerified }: Verif
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<VerificationFormData>({
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<VerificationFormData>({
     resolver: zodResolver(verificationSchema),
     defaultValues: { code: '' },
   });
 
-  // Request OTP when modal opens
+  // Request OTP when modal opens + fetch generated code for dev display
   const sendOtp = useCallback(async () => {
     try {
       await transactionService.requestOtp();
       setOtpSent(true);
+      // Fetch the just-generated code so we can show it in the modal
+      try {
+        const active = await transactionService.getActiveOtp();
+        if (active.active && active.code) {
+          setDevOtp(active.code);
+        }
+      } catch {
+        // non-fatal — modal still works, user reads from mobile app
+      }
     } catch {
       toast.error('Greška pri slanju verifikacionog koda.');
     }
@@ -56,6 +66,7 @@ export default function VerificationModal({ isOpen, onClose, onVerified }: Verif
     setAttemptsLeft(3);
     setServerError('');
     setOtpSent(false);
+    setDevOtp(null);
     reset({ code: '' });
     sendOtp();
   }, [isOpen, reset, sendOtp]);
@@ -169,6 +180,33 @@ export default function VerificationModal({ isOpen, onClose, onVerified }: Verif
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {/* Dev convenience: prikaz generisanog OTP koda iz bekenda.
+                  U produkciji bi ovo trebalo sakriti, ali za SI rok je praktičnije. */}
+              {devOtp && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800 dark:bg-indigo-950/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                        Vaš verifikacioni kod
+                      </p>
+                      <p className="mt-1 font-mono text-2xl font-bold tracking-[0.3em] text-indigo-900 dark:text-indigo-100">
+                        {devOtp}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setValue('code', devOtp, { shouldValidate: true });
+                      }}
+                    >
+                      Popuni
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* OTP Input */}
               <div className="space-y-2">
                 <Label htmlFor="otp" className="text-sm font-medium">

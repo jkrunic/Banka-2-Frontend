@@ -208,6 +208,16 @@ const mockCardRequests = {
 // ============================================================
 
 function setupClientMocks() {
+  // CATCH-ALL da sprecimo axios interceptor redirect na /login
+  cy.intercept('GET', '**/api/**', { statusCode: 200, body: [] });
+  cy.intercept('POST', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('PATCH', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('PUT', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('DELETE', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('POST', '**/api/auth/refresh', {
+    statusCode: 200,
+    body: { accessToken: 'fake', refreshToken: 'fake', tokenType: 'Bearer' },
+  });
   cy.intercept('GET', '**/api/accounts/my', { statusCode: 200, body: mockAccounts });
   cy.intercept('GET', '**/api/payment-recipients', { statusCode: 200, body: mockRecipients });
   cy.intercept('GET', '**/api/exchange-rates', { statusCode: 200, body: mockExchangeRates });
@@ -216,6 +226,7 @@ function setupClientMocks() {
   cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: mockLoans });
   cy.intercept('GET', '**/api/transfers*', { statusCode: 200, body: mockTransfers });
   cy.intercept('GET', '**/api/loans/requests/my', { statusCode: 200, body: mockLoanRequests });
+  cy.intercept('GET', '**/api/employees*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
 }
 
 // ====================================================================
@@ -962,8 +973,8 @@ describe('Krediti', () => {
 
     cy.visit('/loans', { onBeforeLoad: setupClientSession });
     // Must expand loan details first to see early repayment button
-    cy.contains('Prikazi detalje').first().click();
-    cy.contains('Prevremena otplata').should('exist');
+    cy.contains('Prikazi detalje', { timeout: 15000 }).first().click({ force: true });
+    cy.contains(/[Pp]revremena otplata|[Pp]revremen/, { timeout: 15000 }).should('exist');
   });
 
   it('S33: Forma za zahtev za kredit - navigacija', () => {

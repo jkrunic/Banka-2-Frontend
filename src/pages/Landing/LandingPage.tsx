@@ -39,7 +39,7 @@ const features = [
   {
     icon: <CreditCard className="h-6 w-6" />,
     title: 'Bankarsko poslovanje',
-    desc: 'Racuni, placanja, transferi, menjacnica, kartice i krediti.',
+    desc: 'Računi, plaćanja, transferi, menjačnica, kartice i krediti.',
     gradient: 'from-emerald-500 to-teal-400',
   },
   {
@@ -56,7 +56,7 @@ const features = [
   },
   {
     icon: <Globe className="h-6 w-6" />,
-    title: 'Vise valuta',
+    title: 'Više valuta',
     desc: 'RSD, EUR, CHF, USD, GBP, JPY, CAD i AUD sa konverzijom.',
     gradient: 'from-indigo-500 to-blue-400',
   },
@@ -214,7 +214,7 @@ export default function LandingPage() {
               </span>
               {statusText}
             </div>
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white" onClick={() => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light')}>
+            <Button title="Tema" aria-label="Promeni temu" variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white" onClick={() => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light')}>
               {theme === 'light' ? <Sun className="h-4 w-4" /> : theme === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
             </Button>
             <Button className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] transition-all" onClick={() => navigate('/login')}>

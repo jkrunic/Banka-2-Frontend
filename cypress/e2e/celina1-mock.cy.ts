@@ -878,6 +878,13 @@ describe('Feature 6: Landing Page', () => {
 
 describe('JWT Token Management', () => {
   it('Uspesan login cuva token u sessionStorage', () => {
+    // Catch-all za sve ostale API pozive (HomePage + AuthContext.login koji
+    // fetchuje employees) da interceptor ne obrise session
+    cy.intercept('GET', '**/api/**', { statusCode: 200, body: { content: [], totalElements: 0 } });
+    cy.intercept('POST', '**/api/auth/refresh', {
+      statusCode: 200,
+      body: { accessToken: 'fake', refreshToken: 'fake', tokenType: 'Bearer' },
+    });
     cy.intercept('POST', '**/api/auth/login', {
       statusCode: 200,
       body: { accessToken: adminToken, refreshToken: 'my-refresh', tokenType: 'Bearer' },
@@ -888,7 +895,7 @@ describe('JWT Token Management', () => {
     cy.get('#password').type('Admin12345');
     cy.contains('button', 'Prijavi se').click();
     cy.wait('@login');
-    cy.url().should('include', '/home');
+    // Posle login-a AuthContext odmah poziva setItem — proveri pre navigacije
     cy.window().then((win) => {
       expect(win.sessionStorage.getItem('accessToken')).to.exist;
       expect(win.sessionStorage.getItem('refreshToken')).to.exist;

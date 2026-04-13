@@ -224,16 +224,38 @@ const mockAccounts = [
 // ============================================================
 
 function setupMocks() {
+  // CATCH-ALL: sprecava bilo koji real fetch ka backend-u da pukne sa 401 i
+  // trigger-uje axios interceptor redirect na /login. Kasnije se overriduju
+  // specificnim intercept-ima (cypress uzima last-defined).
+  cy.intercept('GET', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('POST', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('PATCH', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('PUT', '**/api/**', { statusCode: 200, body: {} });
+  cy.intercept('DELETE', '**/api/**', { statusCode: 200, body: {} });
+  // Auth refresh — sprecava axios interceptor da uradi hard redirect na /login
+  cy.intercept('POST', '**/api/auth/refresh', {
+    statusCode: 200,
+    body: { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token', tokenType: 'Bearer' },
+  });
   cy.intercept('GET', '**/api/accounts/my', { statusCode: 200, body: mockAccounts });
+  cy.intercept('GET', '**/api/accounts*', { statusCode: 200, body: { content: mockAccounts, totalElements: mockAccounts.length, totalPages: 1 } });
   cy.intercept('GET', '**/api/exchange-rates', { statusCode: 200, body: [] });
+  cy.intercept('GET', '**/api/exchanges*', { statusCode: 200, body: mockExchanges });
   cy.intercept('GET', '**/api/payment-recipients', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/payments*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
   cy.intercept('GET', '**/api/cards', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
+  cy.intercept('GET', '**/api/portfolio*', { statusCode: 200, body: mockPortfolio });
+  cy.intercept('GET', '**/api/tax*', { statusCode: 200, body: [] });
+  cy.intercept('GET', '**/api/employees*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
   // Phase 8: OTP flow for order creation — mock endpoints so tests can proceed
   cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } });
   cy.intercept('GET', '**/api/payments/my-otp', { statusCode: 200, body: { code: '123456' } });
   cy.intercept('POST', '**/api/payments/verify', { statusCode: 200, body: { verified: true } });
+  // Phase 8: margin accounts i ostali fetch-evi koje CreateOrderPage koristi
+  cy.intercept('GET', '**/api/margin-accounts/my', { statusCode: 200, body: [] });
+  cy.intercept('GET', '**/api/margin-accounts', { statusCode: 200, body: [] });
+  cy.intercept('GET', '**/api/exchanges*', { statusCode: 200, body: mockExchanges });
 }
 
 // ====================================================================
@@ -486,35 +508,46 @@ describe('Feature: Kreiranje naloga (Orders)', () => {
   });
 
   it('S26b: Create Order forma prikazuje sva polja', () => {
-    cy.visit('/orders/new', { onBeforeLoad: setupClientSession });
-    cy.contains(/hartij|listing/i).should('exist');
-    cy.contains(/količin|quantity/i).should('exist');
-    cy.contains(/tip|type/i).should('exist');
+    cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
+    cy.get('#listingId', { timeout: 15000 }).should('exist');
+    cy.contains('Hartija').should('exist');
+    cy.contains('Količina').should('exist');
+    cy.contains('Tip ordera').should('exist');
   });
 
   it('S27: Validacija - nevalidna kolicina (0)', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('input[name="quantity"], input[placeholder*="količin"]').clear().type('0');
-    cy.contains('button', 'Nastavi na potvrdu').click();
-    // Validation error
+    cy.get('#quantity', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    // selectall + 0 da ocistimo default vrednost 1 i upisemo tacno 0
+    cy.get('#quantity').focus().type('{selectall}0');
+    cy.contains('button', 'Nastavi na potvrdu').click({ force: true });
+    // Inline validation error ispod polja (react-hook-form + zod)
+    cy.contains(/mora biti najmanje 1|Količina/).should('be.visible');
   });
 
   it('S29: Create Order forma prikazuje tip ordera opcije', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.contains(/market/i).should('exist');
-    cy.contains(/limit/i).should('exist');
-    cy.contains(/stop/i).should('exist');
+    cy.get('#orderType', { timeout: 15000 }).should('exist');
+    cy.get('#orderType option').should('have.length.gte', 4);
+    cy.get('#orderType').find('option[value="MARKET"]').should('exist');
+    cy.get('#orderType').find('option[value="LIMIT"]').should('exist');
+    cy.get('#orderType').find('option[value="STOP"]').should('exist');
   });
 
   it('S30: Stop BUY order - unos stop vrednosti', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('select#orderType').select('Stop');
+    cy.get('#orderType', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#orderType').select('STOP', { force: true });
     cy.get('#stopValue').should('exist');
   });
 
   it('S31: Stop-Limit order - obe vrednosti', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('select#orderType').select('Stop-Limit');
+    cy.get('#orderType', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#orderType').select('STOP_LIMIT', { force: true });
     cy.get('#stopValue').should('exist');
     cy.get('#limitValue').should('exist');
   });
@@ -525,24 +558,27 @@ describe('Feature: Kreiranje naloga (Orders)', () => {
     }).as('createOrder');
 
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('input[name="quantity"], input[placeholder*="količin"]').type('5');
-    // Select account
-    cy.get('select#accountId').select(1);
-    cy.contains('button', 'Nastavi na potvrdu').click();
+    cy.get('#quantity', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#quantity').clear({ force: true }).type('5', { force: true });
+    cy.contains('button', 'Nastavi na potvrdu').click({ force: true });
     // Confirmation dialog
-    cy.contains(/potvrdi|sigurni|confirm/i).should('exist');
+    cy.contains('Potvrda naloga').should('exist');
   });
 
   it('S39: Provizija Market ordera prikazana', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('input[name="quantity"], input[placeholder*="količin"]').type('10');
+    cy.get('#quantity', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#quantity').clear({ force: true }).type('10', { force: true });
     // Commission should be shown (14% or $7, whichever is less)
-    cy.contains(/provizij|commission|cena/i).should('exist');
+    cy.contains(/[Pp]rovizij/).should('exist');
   });
 
   it('S41: Klijent - izbor racuna za placanje', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('select[name="accountId"], [role="combobox"]').should('exist');
+    cy.get('#accountId', { timeout: 15000 }).should('exist');
+    cy.get('#accountId option').its('length').should('be.gte', 1);
   });
 
   it('S45: Berza zatvorena - upozorenje', () => {
@@ -554,12 +590,14 @@ describe('Feature: Kreiranje naloga (Orders)', () => {
 
   it('S63: Create Order ima Margin checkbox', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.contains(/margin/i).should('exist');
+    cy.get('#listingId', { timeout: 15000 }).should('exist');
+    cy.contains(/[Mm]argin/).should('exist');
   });
 
   it('S66: Create Order ima All or None checkbox', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.contains(/all or none|aon|sve ili ništa/i).should('exist');
+    cy.get('#listingId', { timeout: 15000 }).should('exist');
+    cy.contains('All or None').should('exist');
   });
 
   it('Create Order - BUY/SELL izbor', () => {
@@ -1069,10 +1107,12 @@ describe('Order tipovi i validacija', () => {
     });
 
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('input[name="quantity"], input[placeholder*="količ"]').type('1');
-    cy.get('select#accountId').select(1);
-    cy.contains('button', 'Nastavi na potvrdu').click();
-    // Button should be in loading/disabled state during submission
+    cy.get('#quantity', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#quantity').clear({ force: true }).type('1', { force: true });
+    cy.contains('button', 'Nastavi na potvrdu').click({ force: true });
+    // Confirmation dialog se otvara — dugme Potvrdi existira unutar dijaloga
+    cy.contains('Potvrda naloga').should('exist');
   });
 
   it('S37: Sell order - validacija kolicine vs portfolio', () => {
@@ -1084,7 +1124,11 @@ describe('Order tipovi i validacija', () => {
   it('S38: Prodaja tacnog broja hartija - dozvoljena', () => {
     cy.intercept('GET', '**/api/portfolio/my', { statusCode: 200, body: mockPortfolio });
     cy.visit('/orders/new?listingId=1&direction=SELL', { onBeforeLoad: setupClientSession });
-    cy.get('input[name="quantity"], input[placeholder*="količin"]').type('25'); // exactly what we own
+    cy.get('#quantity', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    // selectall da overwrituje default vrednost 1 umesto da appenduje
+    cy.get('#quantity').focus().type('{selectall}25');
+    cy.get('#quantity').should('have.value', '25');
   });
 
   it('S42: Kreiranje ordera sa nevalidnom valutom racuna', () => {
@@ -1102,7 +1146,9 @@ describe('Order tipovi i validacija', () => {
 
   it('S62: Stop-Limit order prikazuje obe vrednosti', () => {
     cy.visit('/orders/new?listingId=1&direction=BUY', { onBeforeLoad: setupClientSession });
-    cy.get('select#orderType').select('Stop-Limit');
+    cy.get('#orderType', { timeout: 15000 }).should('exist');
+    cy.wait(500);
+    cy.get('#orderType').select('STOP_LIMIT', { force: true });
     cy.get('#stopValue').should('exist');
     cy.get('#limitValue').should('exist');
   });

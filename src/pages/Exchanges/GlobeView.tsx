@@ -184,9 +184,11 @@ export default function GlobeView({ exchanges }: Props) {
 
   // Update sun position every 30 seconds (sun moves ~7.5° per 30 min, so 30s is plenty smooth)
   useEffect(() => {
+    const material = dayNightMaterial;
     const update = () => {
-      dayNightMaterial.uniforms.sunDirection.value = getSunDirection(new Date());
-      dayNightMaterial.uniforms.sunDirection.value.needsUpdate = true;
+      // eslint-disable-next-line react-hooks/immutability
+      material.uniforms.sunDirection.value = getSunDirection(new Date());
+      material.uniforms.sunDirection.value.needsUpdate = true;
     };
     update();
     const iv = setInterval(update, 30000);

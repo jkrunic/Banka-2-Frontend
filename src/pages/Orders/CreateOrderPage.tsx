@@ -698,32 +698,28 @@ export default function CreateOrderPage() {
   const handleOtpVerified = async (otpCode: string) => {
     if (!confirmedDto) throw new Error('Nedostaju podaci naloga.');
 
-    try {
-      await orderService.create({ ...confirmedDto, otpCode });
+    // Let VerificationModal handle thrown errors to track attempts and display message
+    await orderService.create({ ...confirmedDto, otpCode });
 
-      toast.success('Nalog je uspešno kreiran.');
+    toast.success('Nalog je uspešno kreiran.');
 
-      setShowVerification(false);
-      setConfirmedDto(null);
-      setPendingOrder(null);
+    setShowVerification(false);
+    setConfirmedDto(null);
+    setPendingOrder(null);
 
-      reset({
-        listingId: selectedListing?.id ?? listings[0]?.id ?? undefined,
-        direction,
-        quantity: 1,
-        orderType: OrderType.MARKET,
-        limitValue: undefined,
-        stopValue: undefined,
-        allOrNone: false,
-        margin: false,
-        accountId: selectedAccount?.id ?? accounts[0]?.id ?? undefined,
-      });
+    reset({
+      listingId: selectedListing?.id ?? listings[0]?.id ?? undefined,
+      direction,
+      quantity: 1,
+      orderType: OrderType.MARKET,
+      limitValue: undefined,
+      stopValue: undefined,
+      allOrNone: false,
+      margin: false,
+      accountId: selectedAccount?.id ?? accounts[0]?.id ?? undefined,
+    });
 
-      navigate('/orders/my');
-    } catch (error) {
-      // Re-throw so VerificationModal tracks attempts and displays message
-      throw error;
-    }
+    navigate('/orders/my');
   };
 
   return (

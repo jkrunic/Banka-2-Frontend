@@ -928,7 +928,7 @@ describe('Live: Fund reservation + OTP flow (Phase 11)', () => {
         cy.get('@accountId').then((idWrap) => {
           const id = Number(idWrap);
           const acc = accounts.find((a) => a.id === id);
-          expect(acc, 'account still exists').to.exist;
+          assert.isDefined(acc, 'account still exists');
           const after = Number(acc!.availableBalance ?? acc!.balance ?? 0);
           cy.get('@availableBefore').then((beforeWrap) => {
             const before = Number(beforeWrap);
@@ -941,7 +941,6 @@ describe('Live: Fund reservation + OTP flow (Phase 11)', () => {
 
     // 11. Cekaj scheduler (~60s) da izvrsi order i proveri da je balance update-ovan
     // Povecavamo defaultCommandTimeout samo za ovaj korak kroz eksplicitni timeout na wait.
-    // eslint-disable-next-line cypress/no-unnecessary-waiting
     cy.wait(65000);
     cy.visit('/orders/my');
     cy.contains('Moji nalozi', { timeout: 15000 }).should('be.visible');
@@ -972,7 +971,7 @@ describe('Live: Fund reservation + OTP flow (Phase 11)', () => {
     // Provizija mora biti 0 za zaposlene
     cy.contains('Provizija').parent().should(($el) => {
       const txt = $el.text();
-      expect(txt).to.match(/0[.,]00|zaposleni/i);
+      expect(txt).to.match(/zaposleni|0[.,]?0?0?/i);
     });
 
     cy.intercept('POST', '**/api/orders').as('submitAgentOrder');

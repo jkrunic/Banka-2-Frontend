@@ -230,6 +230,10 @@ function setupMocks() {
   cy.intercept('GET', '**/api/payments*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
   cy.intercept('GET', '**/api/cards', { statusCode: 200, body: [] });
   cy.intercept('GET', '**/api/loans/my*', { statusCode: 200, body: { content: [], totalElements: 0, totalPages: 0 } });
+  // Phase 8: OTP flow for order creation — mock endpoints so tests can proceed
+  cy.intercept('POST', '**/api/payments/request-otp', { statusCode: 200, body: { sent: true } });
+  cy.intercept('GET', '**/api/payments/my-otp', { statusCode: 200, body: { code: '123456' } });
+  cy.intercept('POST', '**/api/payments/verify', { statusCode: 200, body: { verified: true } });
 }
 
 // ====================================================================

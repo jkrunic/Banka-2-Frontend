@@ -225,8 +225,10 @@ export default function LandingPage() {
       </nav>
 
       {/* ══════ HERO ══════ */}
+      {/* eslint-disable-next-line react-hooks/refs */}
       <section ref={mouseGlow.ref} className="relative z-10 mx-auto flex min-h-[calc(100svh-7.5rem)] max-w-7xl flex-col items-center justify-center px-6 py-12 lg:py-0">
         {/* Mouse-following glow */}
+        {/* eslint-disable-next-line react-hooks/refs */}
         <div className="pointer-events-none absolute z-0 h-[400px] w-[400px] rounded-full bg-indigo-400/10 dark:bg-indigo-500/10 blur-[100px] transition-all duration-700 ease-out" style={{ left: mouseGlow.pos.x - 200, top: mouseGlow.pos.y - 200 }} />
 
         {/* World map background */}

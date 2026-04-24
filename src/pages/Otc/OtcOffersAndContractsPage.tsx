@@ -40,6 +40,52 @@ const statusBadgeVariant = (status: string): 'success' | 'secondary' | 'destruct
   return 'destructive';
 };
 
+/**
+ * Spec (Celina 4): zeleno ≤ ±5% odstupanja cene ponude od trzisne cene,
+ * zuto ±5-20%, crveno > ±20%. Vraca klase za pozadinu reda + labelu.
+ */
+type OfferDeviation = {
+  percent: number;
+  label: string;
+  rowClass: string;
+  badgeClass: string;
+};
+
+function computeOfferDeviation(
+  pricePerStock: number,
+  currentPrice: number | null | undefined,
+): OfferDeviation | null {
+  if (currentPrice == null || !Number.isFinite(currentPrice) || currentPrice <= 0) {
+    return null;
+  }
+  const pct = ((pricePerStock - currentPrice) / currentPrice) * 100;
+  const abs = Math.abs(pct);
+  const sign = pct > 0 ? '+' : pct < 0 ? '-' : '';
+  const label = `${sign}${abs.toFixed(1)}%`;
+  if (abs <= 5) {
+    return {
+      percent: pct,
+      label,
+      rowClass: 'bg-emerald-500/5 hover:bg-emerald-500/10',
+      badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+    };
+  }
+  if (abs <= 20) {
+    return {
+      percent: pct,
+      label,
+      rowClass: 'bg-amber-500/5 hover:bg-amber-500/10',
+      badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+    };
+  }
+  return {
+    percent: pct,
+    label,
+    rowClass: 'bg-red-500/5 hover:bg-red-500/10',
+    badgeClass: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
+  };
+}
+
 type Tab = 'offers' | 'contracts';
 
 export default function OtcOffersAndContractsPage() {
@@ -284,9 +330,11 @@ export default function OtcOffersAndContractsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeOffers.map((offer) => (
+                  {activeOffers.map((offer) => {
+                    const deviation = computeOfferDeviation(offer.pricePerStock, offer.currentPrice);
+                    return (
                     <Fragment key={offer.id}>
-                      <TableRow>
+                      <TableRow className={deviation?.rowClass}>
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="font-semibold">{offer.listingTicker}</span>
@@ -301,8 +349,19 @@ export default function OtcOffersAndContractsPage() {
                         </TableCell>
                         <TableCell className="font-mono">{offer.quantity}</TableCell>
                         <TableCell className="font-mono text-sm">
-                          <div>
-                            {formatAmount(offer.pricePerStock)} / {offer.listingCurrency}
+                          <div className="flex items-center gap-2">
+                            <span>
+                              {formatAmount(offer.pricePerStock)} / {offer.listingCurrency}
+                            </span>
+                            {deviation && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-semibold ${deviation.badgeClass}`}
+                                title={`Odstupanje od trzisne cene (${offer.currentPrice} ${offer.listingCurrency})`}
+                              >
+                                {deviation.label}
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-muted-foreground">
                             Prem: {formatAmount(offer.premium)} {offer.listingCurrency}
@@ -429,7 +488,8 @@ export default function OtcOffersAndContractsPage() {
                         </TableRow>
                       )}
                     </Fragment>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

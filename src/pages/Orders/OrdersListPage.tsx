@@ -46,7 +46,8 @@ export default function OrdersListPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PENDING');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ id: number; type: 'approve' | 'decline' } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ id: number; type: 'approve' | 'decline'; remaining?: number } | null>(null);
+  const [cancelQuantity, setCancelQuantity] = useState('');
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const pageSize = 20;
@@ -120,12 +121,18 @@ export default function OrdersListPage() {
     }
   };
 
-  const handleDecline = async (orderId: number) => {
+  const handleDecline = async (orderId: number, quantity?: number) => {
     setProcessingId(orderId);
     try {
-      await orderService.decline(orderId);
-      toast.success('Nalog je odbijen.');
+      if (quantity != null && quantity > 0) {
+        await orderService.cancelOrder(orderId, quantity);
+        toast.success(`Otkazano ${quantity} hartija iz naloga.`);
+      } else {
+        await orderService.decline(orderId);
+        toast.success('Nalog je odbijen.');
+      }
       setConfirmAction(null);
+      setCancelQuantity('');
       await loadOrders();
     } catch {
       toast.error('Odbijanje naloga nije uspelo.');
@@ -138,10 +145,22 @@ export default function OrdersListPage() {
     if (!confirmAction) return;
     if (confirmAction.type === 'approve') {
       void handleApprove(confirmAction.id);
-    } else {
-      void handleDecline(confirmAction.id);
+      return;
     }
+    const parsedQty = Number(cancelQuantity);
+    const remaining = confirmAction.remaining ?? 0;
+    if (
+      cancelQuantity.trim() !== '' &&
+      Number.isFinite(parsedQty) &&
+      parsedQty > 0 &&
+      parsedQty < remaining
+    ) {
+      void handleDecline(confirmAction.id, parsedQty);
+      return;
+    }
+    void handleDecline(confirmAction.id);
   };
+
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -203,14 +222,31 @@ export default function OrdersListPage() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <Card className="border-2 border-primary">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+          <CardContent className="pt-6 space-y-3">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
               <p className="font-medium">
                 {confirmAction.type === 'approve'
                   ? 'Da li ste sigurni da želite da odobrite ovaj nalog?'
-                  : 'Da li ste sigurni da želite da odbijete ovaj nalog?'}
+                  : confirmAction.remaining != null && confirmAction.remaining > 0
+                    ? `Otkazivanje naloga (preostalo ${confirmAction.remaining} hartija). Ostavite prazno za otkazivanje celog preostatka ili unesite manju količinu za parcijalno otkazivanje.`
+                    : 'Da li ste sigurni da želite da odbijete ovaj nalog?'}
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                {confirmAction.type === 'decline' &&
+                  confirmAction.remaining != null &&
+                  confirmAction.remaining > 1 && (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={confirmAction.remaining - 1}
+                      placeholder={`do ${confirmAction.remaining - 1}`}
+                      value={cancelQuantity}
+                      onChange={(e) => setCancelQuantity(e.target.value)}
+                      disabled={processingId === confirmAction.id}
+                      className="w-28 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    />
+                  )}
                 <Button
                   size="sm"
                   variant={confirmAction.type === 'approve' ? 'default' : 'destructive'}
@@ -227,7 +263,10 @@ export default function OrdersListPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setConfirmAction(null)}
+                  onClick={() => {
+                    setConfirmAction(null);
+                    setCancelQuantity('');
+                  }}
                   disabled={processingId === confirmAction.id}
                 >
                   Otkaži
@@ -355,7 +394,16 @@ export default function OrdersListPage() {
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => setConfirmAction({ id: order.id, type: 'decline' })}
+                                onClick={() => {
+                                  setCancelQuantity('');
+                                  setConfirmAction({
+                                    id: order.id,
+                                    type: 'decline',
+                                    remaining: order.status === 'APPROVED'
+                                      ? (order.remainingPortions ?? order.quantity)
+                                      : undefined,
+                                  });
+                                }}
                                 disabled={processingId === order.id}
                               >
                                 {isPending ? 'Odbij' : 'Otkaži'}

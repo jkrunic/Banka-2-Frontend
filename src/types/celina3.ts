@@ -282,6 +282,8 @@ export interface OtcOffer {
   quantity: number;
   pricePerStock: number;
   premium: number;
+  /** Trenutna trzisna cena hartije — koristi se za bojenje odstupanja (±5 / ±20%). */
+  currentPrice?: number;
   settlementDate: string;
   lastModifiedById: number;
   lastModifiedByName: string;

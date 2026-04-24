@@ -57,7 +57,7 @@ const orderService = {
 
   /**
    * PATCH /orders/{id}/decline
-   * Supervizor odbija order.
+   * Supervizor odbija (ceo) order.
    */
   decline: async (id: number): Promise<Order> => {
     const response = await api.patch(`/orders/${id}/decline`);
@@ -65,11 +65,16 @@ const orderService = {
   },
 
   /**
-   * PATCH /orders/{id}/decline
-   * Korisnik otkazuje sopstveni order (koristi isti endpoint kao decline).
+   * PATCH /orders/{id}/decline[?quantity=X]
+   * Korisnik otkazuje sopstveni order. Ako je {@code quantity} prosleden i
+   * manji od preostalog broja nepopunjenih delova, order se parcijalno skracuje
+   * (ostaje APPROVED sa manjim remainingPortions). Inace se odbija u celosti.
    */
-  cancelOrder: async (id: number): Promise<Order> => {
-    const response = await api.patch(`/orders/${id}/decline`);
+  cancelOrder: async (id: number, quantity?: number): Promise<Order> => {
+    const url = quantity != null && quantity > 0
+      ? `/orders/${id}/decline?quantity=${quantity}`
+      : `/orders/${id}/decline`;
+    const response = await api.patch(url);
     return response.data;
   },
 };

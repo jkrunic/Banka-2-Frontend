@@ -121,6 +121,13 @@ jobs:
             -e SPRING_JPA_HIBERNATE_DDL_AUTO="update" \
             -e SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT="org.hibernate.dialect.PostgreSQLDialect" \
             -e SPRING_JPA_PROPERTIES_HIBERNATE_TYPE_PREFERRED_BOOLEAN_JDBC_TYPE="INTEGER" \
+            -e JWT_SECRET="ci-secret-key-for-ci-only-do-not-use-in-prod" \
+            -e SPRING_MAIL_HOST="localhost" \
+            -e SPRING_MAIL_PORT="25" \
+            -e SPRING_MAIL_USERNAME="ci@example.com" \
+            -e SPRING_MAIL_PASSWORD="ci-dummy" \
+            -e EXCHANGE_API_KEY="ci-dummy-key" \
+            -e STOCK_API_KEYS="ci-key-1,ci-key-2,ci-key-3,ci-key-4" \
             ghcr.io/raf-si-2025/banka2-backend:latest
 
       - name: Wait for backend to be ready
@@ -146,8 +153,60 @@ jobs:
           PGPASSWORD: banka2pass
         run: |
           git clone --depth 1 https://github.com/RAF-SI-2025/Banka-2-Backend.git /tmp/backend
+
+          # Sacekaj da Hibernate kreira sve tabele (DDL_AUTO=update ih kreira pri prvom boot-u)
+          echo "Cekam da Hibernate kreira sve tabele..."
+          TABLE_COUNT=0
+          for i in $(seq 1 30); do
+            TABLE_COUNT=$(psql -h 127.0.0.1 -U banka2user -d banka2 -t -A -c \
+              "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null || echo "0")
+            echo "Pokusaj $i: $TABLE_COUNT tabela kreirane"
+            if [ "$TABLE_COUNT" -ge 30 ]; then
+              echo "Sve tabele kreirane."
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$TABLE_COUNT" -lt 30 ]; then
+            echo "::error::Hibernate nije kreirao dovoljno tabela ($TABLE_COUNT < 30)"
+            docker logs backend | tail -50
+            exit 1
+          fi
+
+          # Truncate sve tabele pre seed-a (backend je mozda vec ubacio neke default podatke)
+          psql -h 127.0.0.1 -U banka2user -d banka2 -v ON_ERROR_STOP=1 -c \
+            "DO \$\$ DECLARE r RECORD; BEGIN
+              EXECUTE 'SET session_replication_role = replica';
+              FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+                EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+              END LOOP;
+              EXECUTE 'SET session_replication_role = DEFAULT';
+            END \$\$;"
+
+          # Seed
           psql -h 127.0.0.1 -U banka2user -d banka2 -v ON_ERROR_STOP=1 -f /tmp/backend/seed.sql
+
+          # Verifikuj seed (osnovni smoke checks)
+          EMP_COUNT=$(psql -h 127.0.0.1 -U banka2user -d banka2 -t -A -c "SELECT COUNT(*) FROM employees")
+          CLIENT_COUNT=$(psql -h 127.0.0.1 -U banka2user -d banka2 -t -A -c "SELECT COUNT(*) FROM clients")
+          LISTING_COUNT=$(psql -h 127.0.0.1 -U banka2user -d banka2 -t -A -c "SELECT COUNT(*) FROM listings")
+          echo "Seed verifikacija: employees=$EMP_COUNT, clients=$CLIENT_COUNT, listings=$LISTING_COUNT"
+          if [ "$EMP_COUNT" -lt 3 ] || [ "$CLIENT_COUNT" -lt 3 ] || [ "$LISTING_COUNT" -lt 5 ]; then
+            echo "::error::Seed nije uspesno ubacen podatke"
+            exit 1
+          fi
           echo "Database seeded successfully!"
+
+          # Restart backend da pokupi seed-ovane podatke (cache refresh)
+          docker restart backend
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/swagger-ui.html > /dev/null 2>&1 || curl -sf http://localhost:8080/ > /dev/null 2>&1; then
+              echo "Backend je restartovan i spreman posle seed-a."
+              break
+            fi
+            sleep 2
+          done
 
       - name: Build frontend
         if: env.SKIP_LIVE != 'true'

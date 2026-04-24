@@ -128,6 +128,23 @@ export default function App() {
           {/* OTC trgovina (Celina 4 intra-bank) */}
           <Route path="/otc" element={<OtcTrgovinaPage />} />
           <Route path="/otc/offers" element={<OtcOffersAndContractsPage />} />
+
+          {/*
+            TODO — CELINA 4 NOVE RUTE (podela):
+              Zaduzen: jkrunic (funds discovery + details)
+                <Route path="/funds" element={<FundsDiscoveryPage />} />
+                <Route path="/funds/:id" element={<FundDetailsPage />} />
+              Zaduzen: antonije3 (create fund — supervisor only)
+                <Route path="/funds/create" element={<CreateFundPage />} />
+              Zaduzen: sssmarta (profit banke — supervisor only; zavisi od ProtectedRoute employeeOnly + server guard)
+                — ubaci u <ProtectedRoute employeeOnly> blok gore:
+                <Route path="/employee/profit-bank" element={<ProfitBankPage />} />
+              Import-i:
+                import FundsDiscoveryPage from '@/pages/Funds/FundsDiscoveryPage';
+                import FundDetailsPage from '@/pages/Funds/FundDetailsPage';
+                import CreateFundPage from '@/pages/Funds/CreateFundPage';
+                import ProfitBankPage from '@/pages/ProfitBank/ProfitBankPage';
+          */}
         </Route>
       </Route>
 

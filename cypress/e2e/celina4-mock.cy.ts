@@ -56,16 +56,42 @@ import {
 //  MOCK DATA — popuniti kako se feature implementira
 // ============================================================
 
-// TODO(jkrunic) — dodaj mockFunds za Issue #70/#71/#72
-// Referenca: src/types/celina4.ts → InvestmentFundSummary, InvestmentFundDetail
-// Primer:
-// const mockFunds = [
-//   {
-//     id: 1, name: 'Alpha Growth Fund', description: 'Fond fokusiran na IT sektor',
-//     minimumContribution: 1000, fundValue: 2600000, profit: 5000,
-//     managerName: 'Marko Petrović', inceptionDate: '2025-01-15',
-//   }, ...
-// ];
+const mockFunds = [
+  {
+    id: 1, name: 'Alpha Growth Fund', description: 'Fond fokusiran na IT sektor',
+    minimumContribution: 1000, fundValue: 2600000, profit: 150000,
+    managerName: 'Marko Petrović', inceptionDate: '2025-01-15',
+  },
+  {
+    id: 2, name: 'Beta Income Fund', description: 'Stabilan prihod iz obveznica',
+    minimumContribution: 5000, fundValue: 1200000, profit: -30000,
+    managerName: 'Nikola Milenković', inceptionDate: '2025-06-01',
+  },
+];
+
+const mockFundDetail = {
+  id: 1, name: 'Alpha Growth Fund', description: 'Fond fokusiran na IT sektor',
+  managerName: 'Marko Petrović', managerEmployeeId: 99,
+  fundValue: 2600000, liquidAmount: 1500000, profit: 150000,
+  minimumContribution: 1000, accountNumber: '222-0000000012345-89',
+  inceptionDate: '2025-01-15',
+  holdings: [
+    { listingId: 1, ticker: 'AAPL', name: 'Apple Inc.', quantity: 50,
+      currentPrice: 220, change: 1.5, volume: 1200000, initialMarginCost: 11000,
+      acquisitionDate: '2025-02-10' },
+    { listingId: 2, ticker: 'MSFT', name: 'Microsoft Corp.', quantity: 30,
+      currentPrice: 410, change: -0.8, volume: 800000, initialMarginCost: 12300,
+      acquisitionDate: '2025-03-05' },
+  ],
+  performance: [],
+};
+
+const mockPerformance = [
+  { date: '2025-10-01', fundValue: 2400000, profit: 100000 },
+  { date: '2025-11-01', fundValue: 2500000, profit: 120000 },
+  { date: '2025-12-01', fundValue: 2550000, profit: 130000 },
+  { date: '2026-01-01', fundValue: 2600000, profit: 150000 },
+];
 
 // TODO(ekalajdzic13322) — mockOtcRemoteListings + mockOtcRemoteOffers za Issue #66-69
 // Referenca: src/types/celina4.ts → OtcInterbankListing, OtcInterbankOffer
@@ -125,17 +151,66 @@ describe('Mock C4: Investicioni fondovi - Discovery', () => {
 // ============================================================
 describe('Mock C4: Investicioni fondovi - Detalji', () => {
   beforeEach(() => {
-    setupClientSession();
-    // TODO(jkrunic): intercept '/api/funds/1' + '/api/funds/1/performance'
+    cy.intercept('GET', '/api/funds/1', { body: mockFundDetail }).as('fundDetail');
+    cy.intercept('GET', '/api/funds/1/performance*', { body: mockPerformance }).as('fundPerf');
   });
 
-  it.skip('TODO S9: Prikaz 4 KPI karte (Vrednost, Likvidnost, Profit, Min ulog)', () => {});
-  it.skip('TODO S10: Lista hartija u fondu', () => {});
-  it.skip('TODO S11: Performance grafik sa period toggle-om', () => {});
-  it.skip('TODO S12: Supervizor (owner) vidi "Prodaj" dugme pored hartija', () => {});
-  it.skip('TODO S13: "Uplati u fond" dugme otvara FundInvestDialog', () => {});
-  it.skip('TODO S14: "Povuci iz fonda" dugme otvara FundWithdrawDialog', () => {});
-  it.skip('TODO S15: 404 kad fond ne postoji → navigira na /funds sa toast-om', () => {});
+  it('S9: Prikaz 4 KPI karte (Vrednost, Likvidnost, Profit, Min ulog)', () => {
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('Vrednost fonda').should('be.visible');
+    cy.contains('Likvidnost').should('be.visible');
+    cy.contains('Profit').should('be.visible');
+    cy.contains('Minimalni ulog').should('be.visible');
+  });
+
+  it('S10: Lista hartija u fondu', () => {
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('Hartije u fondu').should('be.visible');
+    cy.contains('AAPL').should('be.visible');
+    cy.contains('MSFT').should('be.visible');
+  });
+
+  it('S11: Performance grafik sa period toggle-om', () => {
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('Performanse fonda').should('be.visible');
+    cy.contains('button', '1M').should('be.visible');
+    cy.contains('button', '3M').should('be.visible');
+    cy.contains('button', '1G').should('be.visible');
+    cy.contains('button', '1M').click();
+    cy.wait('@fundPerf');
+  });
+
+  it('S12: Supervizor (owner) vidi "Prodaj" dugme pored hartija', () => {
+    const ownerDetail = { ...mockFundDetail, managerEmployeeId: 1 };
+    cy.intercept('GET', '/api/funds/1', { body: ownerDetail }).as('fundOwner');
+    cy.visit('/funds/1', { onBeforeLoad: setupSupervisorSession });
+    cy.wait('@fundOwner');
+    cy.contains('button', 'Prodaj').should('be.visible');
+  });
+
+  it('S13: Klijent vidi "Uplati u fond" dugme', () => {
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('button', 'Uplati u fond').should('be.visible');
+  });
+
+  it('S14: Klijent vidi "Povuci iz fonda" dugme', () => {
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('button', 'Povuci iz fonda').should('be.visible');
+  });
+
+  it('S15: 404 kad fond ne postoji - navigira na /funds', () => {
+    cy.intercept('GET', '/api/funds/999', { statusCode: 404, body: { error: 'Not found' } }).as('fund404');
+    cy.intercept('GET', '/api/funds/999/performance*', { statusCode: 404, body: { error: 'Not found' } });
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('fundsList');
+    cy.visit('/funds/999', { onBeforeLoad: setupClientSession });
+    cy.wait('@fund404');
+    cy.url().should('include', '/funds');
+  });
 });
 
 

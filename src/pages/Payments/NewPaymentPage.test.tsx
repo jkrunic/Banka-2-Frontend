@@ -76,6 +76,20 @@ function renderPage(route = '/payments/new') {
   );
 }
 
+/**
+ * Spec Sc 12 (Bug T2-005 12.05.2026): Submit forme otvara confirm dialog;
+ * "Potvrdi i nastavi" iz dialog-a otvara OTP modal. Pre fix-a klik na
+ * "Nastavi na verifikaciju" je direktno otvarao OTP. Helper kombinuje oba
+ * koraka da bismo zadrzali tedious test setup.
+ */
+async function submitAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+  await waitFor(() => {
+    expect(screen.getByTestId('payment-confirm-dialog')).toBeInTheDocument();
+  });
+  await user.click(screen.getByTestId('payment-confirm-submit'));
+}
+
 describe('NewPaymentPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -182,15 +196,15 @@ describe('NewPaymentPage', () => {
       expect(screen.getByLabelText(/Iznos/i)).toBeInTheDocument();
     });
 
-    // Submit form
-    const submitBtn = screen.getByRole('button', { name: /Nastavi na verifikaciju/i });
-    await user.click(submitBtn);
+    // Negativan test — submit prazne forme: zod validacija mora pasti,
+    // confirm dialog NE sme da se prikaze.
+    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
 
     await waitFor(() => {
-      // Should show validation errors
       const errors = document.querySelectorAll('.text-destructive');
       expect(errors.length).toBeGreaterThan(0);
     });
+    expect(screen.queryByTestId('payment-confirm-dialog')).not.toBeInTheDocument();
   });
 
   it('opens verification modal on valid submission', async () => {
@@ -216,8 +230,7 @@ describe('NewPaymentPage', () => {
     await user.type(purposeInput, 'Test placanje');
 
     // Submit
-    const submitBtn = screen.getByRole('button', { name: /Nastavi na verifikaciju/i });
-    await user.click(submitBtn);
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();
@@ -342,13 +355,15 @@ describe('NewPaymentPage', () => {
     const purposeInput = screen.getByLabelText(/Svrha placanja/i);
     await user.type(purposeInput, 'Test');
 
-    const submitBtn = screen.getByRole('button', { name: /Nastavi na verifikaciju/i });
-    await user.click(submitBtn);
+    // Negativan test — validacija mora pasti, confirm dialog se NE otvara.
+    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
 
     await waitFor(() => {
       const errors = document.querySelectorAll('.text-destructive');
       expect(errors.length).toBeGreaterThan(0);
     });
+    // Confirm dialog ne sme da se prikaze posle invalid submit-a.
+    expect(screen.queryByTestId('payment-confirm-dialog')).not.toBeInTheDocument();
   });
 
   // ---------- Verification modal interaction ----------
@@ -377,8 +392,7 @@ describe('NewPaymentPage', () => {
     await user.type(purposeInput, 'Test placanje');
 
     // Submit
-    const submitBtn = screen.getByRole('button', { name: /Nastavi na verifikaciju/i });
-    await user.click(submitBtn);
+    await submitAndConfirm(user);
 
     // OTP modal opens
     await waitFor(() => {
@@ -407,7 +421,7 @@ describe('NewPaymentPage', () => {
     await user.clear(screen.getByLabelText(/Iznos/i));
     await user.type(screen.getByLabelText(/Iznos/i), '5000');
     await user.type(screen.getByLabelText(/Svrha placanja/i), 'Interbank payment');
-    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();
@@ -435,7 +449,7 @@ describe('NewPaymentPage', () => {
     await user.type(screen.getByLabelText(/Iznos/i), '5000');
     await user.type(screen.getByLabelText(/Svrha placanja/i), 'Test');
 
-    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();
@@ -632,8 +646,8 @@ describe('NewPaymentPage', () => {
     await user.type(amountInput, '5000');
     await user.type(screen.getByLabelText(/Svrha placanja/i), 'Test inter-bank');
 
-    // Submit i potvrdi OTP
-    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+    // Submit, potvrdi confirm dialog, pa OTP
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();
@@ -692,7 +706,7 @@ describe('NewPaymentPage', () => {
     await user.type(amountInput, '5000');
     await user.type(screen.getByLabelText(/Svrha placanja/i), 'Test');
 
-    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();
@@ -755,7 +769,7 @@ describe('NewPaymentPage', () => {
     await user.type(amountInput, '5000');
     await user.type(screen.getByLabelText(/Svrha placanja/i), 'Test');
 
-    await user.click(screen.getByRole('button', { name: /Nastavi na verifikaciju/i }));
+    await submitAndConfirm(user);
 
     await waitFor(() => {
       expect(screen.getByTestId('verification-modal')).toBeInTheDocument();

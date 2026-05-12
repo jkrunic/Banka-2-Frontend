@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import VerificationModal from '@/components/shared/VerificationModal';
-import { SendHorizonal, Wallet, ArrowRight, User, FileText, Hash, BookUser, CheckCircle2, X, Globe, Loader2, XCircle, AlertTriangle } from 'lucide-react';
+import { SendHorizonal, Wallet, ArrowRight, ArrowLeftRight, User, FileText, Hash, BookUser, CheckCircle2, X, Globe, Loader2, XCircle, AlertTriangle } from 'lucide-react';
 import { asArray, formatAmount, getErrorMessage } from '@/utils/formatters';
 
 const OUR_BANK_PREFIX = '222';
@@ -113,6 +113,12 @@ export default function NewPaymentPage() {
   const [savingRecipient, setSavingRecipient] = useState(false);
   const [interbankTracking, setInterbankTracking] = useState<InterbankPayment | null>(null);
   const [retryingStuck, setRetryingStuck] = useState(false);
+  // Spec Sc 12 (Bug T2-005 prijavljen 12.05.2026): Pre OTP modala mora se
+  // prikazati confirm dialog sa pregledom uplate. Za cross-currency intra-bank
+  // dodatno prikazuje napomenu da ce kurs i provizija biti primenjeni od strane
+  // BE-a. (Za inter-bank flow vec postoji 2PC stepper posle OTP-a — confirm
+  // dialog se isto prikazuje da bi UX bio uniforman.)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const {
     register,
@@ -188,7 +194,16 @@ export default function NewPaymentPage() {
     return map;
   }, [accounts]);
 
+  // Spec Sc 12 (Bug T2-005): Submit forme NE otvara odmah OTP. Otvara confirm
+  // dialog sa pregledom uplate (iznos, valuta, primalac, FX napomena ako je
+  // cross-currency intra-bank). Korisnik klikom na "Potvrdi i nastavi" prelazi
+  // na OTP verifikaciju.
   const onSubmit = async () => {
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmAndProceed = () => {
+    setShowConfirmDialog(false);
     setShowVerification(true);
   };
 
@@ -810,6 +825,131 @@ export default function NewPaymentPage() {
           </Card>
         </div>
       )}
+
+      {/* Spec Sc 12 (Bug T2-005): Confirm dialog pre OTP-a sa pregledom uplate */}
+      {showConfirmDialog && (() => {
+        const formData = getValues();
+        const fromAcc = accountLookup.get(formData.fromAccountNumber);
+        const isInter = isInterbank(formData.toAccountNumber || '');
+        const targetAcc = accountLookup.get(formData.toAccountNumber);
+        // Cross-currency: ako je primalac u nasoj banci i znamo mu valutu, a
+        // razlikuje se od izvora, prikazi FX napomenu. Za inter-bank ne znamo
+        // valutu primaoca pa prikazujemo generic 2PC napomenu.
+        const sourceCurrency = fromAcc?.currency || 'RSD';
+        const targetCurrency = targetAcc?.currency;
+        const isCrossCurrency = !isInter && targetCurrency && targetCurrency !== sourceCurrency;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-up">
+            <Card className="w-full max-w-md mx-4 rounded-2xl border shadow-2xl" data-testid="payment-confirm-dialog">
+              <CardContent className="p-6 space-y-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-base">Potvrdi placanje</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Proverite detalje pre slanja na verifikaciju.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-muted/30 p-4 space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Sa racuna</span>
+                    <span className="font-mono text-xs">{formData.fromAccountNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Primalac</span>
+                    <span className="font-medium">{formData.recipientName}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Racun primaoca</span>
+                    <span className="font-mono text-xs">{formData.toAccountNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <span className="text-muted-foreground">Iznos</span>
+                    <span className="font-mono font-bold text-lg">
+                      {formatAmount(formData.amount)} {sourceCurrency}
+                    </span>
+                  </div>
+                  {formData.paymentPurpose && (
+                    <div className="flex items-start justify-between gap-3 border-t pt-3">
+                      <span className="text-muted-foreground shrink-0">Svrha</span>
+                      <span className="text-sm text-right">{formData.paymentPurpose}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cross-currency napomena — Spec §253-263 (kursna lista, provizija) */}
+                {isCrossCurrency && (
+                  <div
+                    className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-50/70 dark:bg-amber-950/30 p-3"
+                    data-testid="payment-fx-notice"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
+                      <ArrowLeftRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                        Konverzija valute
+                      </p>
+                      <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                        Vasa uplata <span className="font-mono">{sourceCurrency}</span> ce biti konvertovana u
+                        <span className="font-mono"> {targetCurrency}</span> po prodajnom kursu banke,
+                        uz proviziju za konverziju. Iznos koji primalac dobija zavisi od dnevnog kursa
+                        u trenutku obrade.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inter-bank napomena — 2PC moze trajati do 2 min */}
+                {isInter && (
+                  <div
+                    className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-50/70 dark:bg-blue-950/30 p-3"
+                    data-testid="payment-interbank-notice"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40">
+                      <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                        Medjubankarsko placanje
+                      </p>
+                      <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
+                        Racun primaoca pripada drugoj banci. Transakcija ide kroz 2PC protokol
+                        i moze trajati do 2 minuta. Status pratite u real-time-u nakon potvrde.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-11 rounded-xl"
+                    onClick={() => setShowConfirmDialog(false)}
+                    data-testid="payment-confirm-cancel"
+                  >
+                    Otkazi
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20"
+                    onClick={handleConfirmAndProceed}
+                    data-testid="payment-confirm-submit"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Potvrdi i nastavi
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       <VerificationModal
         isOpen={showVerification}

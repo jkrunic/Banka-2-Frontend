@@ -397,10 +397,28 @@ export default function EmployeeEditPage() {
               <CardContent>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">
+                      Email <span className="text-xs text-muted-foreground font-normal">(ne moze se menjati)</span>
+                    </Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input id="email" type="email" className="h-11 pl-9" {...register('email')} />
+                      {/*
+                       * Spec §30 dozvoljava izmenu "svih osim ID-a i passworda" ali Plan
+                       * Manuelnog Testiranja + Bug T1-009/T1-010 (prijavljen 12.05.2026)
+                       * traze read-only ponasanje. Email je identitet zaposlenog (login key,
+                       * email links, audit log) i ne sme se menjati bez admin procedure.
+                       * BE EmployeeService.updateEmployee dodatno odbija email change (defense
+                       * in depth ako neko zaobide disabled FE polje preko DevTools-a).
+                       */}
+                      <Input
+                        id="email"
+                        type="email"
+                        className="h-11 pl-9 bg-muted/40 cursor-not-allowed"
+                        {...register('email')}
+                        disabled
+                        aria-readonly
+                        data-testid="employee-edit-email-disabled"
+                      />
                     </div>
                     {errors.email && (
                       <p className="text-sm text-destructive">{errors.email.message}</p>

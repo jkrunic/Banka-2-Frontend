@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, Loader2, AlertTriangle, Clock, KeySquare } from 'lucide-react';
 import {
   activateAccountSchema,
   type ActivateAccountFormData,
@@ -12,11 +12,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { getPasswordStrength, getStrengthInfo } from '../../utils/passwordStrength';
 import AuthPageLayout from '@/components/layout/AuthPageLayout';
+
+// Spec Sc 9 + ad-hoc bag 12.05.2026: pre renderovanja forme, FE poziva
+// GET /auth-employee/activation-token/{token}/status da bi proverio da li je
+// token jos validan. Bez ovog koraka, korisnik koji je vec aktivirao nalog
+// pa osvezi stranicu vidi formu (FE je propusta) iako BE-u poziv ne uspeva
+// (token je used). Token state se mapira u jedan od narednih ekrana.
+type TokenStatus = 'CHECKING' | 'VALID' | 'USED' | 'EXPIRED' | 'INVALID' | 'ALREADY_ACTIVE';
 
 export default function ActivateAccountPage() {
   const [searchParams] = useSearchParams();
@@ -27,6 +34,8 @@ export default function ActivateAccountPage() {
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus>('CHECKING');
+  const [tokenEmail, setTokenEmail] = useState<string | null>(null);
 
   const {
     register,
@@ -42,9 +51,34 @@ export default function ActivateAccountPage() {
   const strength = getPasswordStrength(passwordValue);
   const strengthInfo = getStrengthInfo(strength);
 
+  // Spec Sc 9 + Bug 12.05.2026: token state pre-check. Ako je token vec
+  // iskorisen ili istekao, ne renderujemo formu uopste — prikazujemo
+  // odgovarajucu poruku sa dugmetom za login (ALREADY_ACTIVE/USED) ili
+  // za kontakt admina (EXPIRED/INVALID).
+  useEffect(() => {
+    if (!token) {
+      setTokenStatus('INVALID');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await authService.getActivationTokenStatus(token);
+        if (cancelled) return;
+        setTokenStatus(result.status);
+        setTokenEmail(result.email ?? null);
+      } catch {
+        if (!cancelled) setTokenStatus('INVALID');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const onSubmit = async (data: ActivateAccountFormData) => {
     if (!token) {
-      setServerError('Nevažeći link za aktivaciju. Kontaktirajte administratora.');
+      setServerError('Nevazeci link za aktivaciju. Kontaktirajte administratora.');
       return;
     }
     setServerError('');
@@ -52,28 +86,53 @@ export default function ActivateAccountPage() {
     try {
       await authService.activateAccount({ token, password: data.password });
       setSuccess(true);
+      // Napomena: NE menjamo tokenStatus na USED ovde. Success state je
+      // distinkan UX — pokazuje "Nalog uspesno aktiviran" + "Idi na prijavu".
+      // Tek na sledeci mount (refresh stranice) pre-check ce detektovati
+      // USED status i prikazati "Vec iskoriscen" stranicu.
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      setServerError(
-        error.response?.data?.message ||
-          'Greška pri aktivaciji naloga. Link je možda istekao.'
-      );
+      const beMsg = error.response?.data?.message;
+      // Ako BE javi da je token iskorisen/istekao izmedju pre-checka i submita
+      // (race condition: drugi tab ili admin invalidacija), refresh-ujemo status
+      // da prikazemo pravu stranicu umesto generickog error toast-a.
+      if (beMsg && /vec used|already used|invalidated|expired/i.test(beMsg)) {
+        try {
+          const refreshed = await authService.getActivationTokenStatus(token);
+          setTokenStatus(refreshed.status);
+        } catch {
+          setTokenStatus('INVALID');
+        }
+        return;
+      }
+      setServerError(beMsg || 'Greska pri aktivaciji naloga. Link je mozda istekao.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!token) {
+  // Spec Sc 9 — token istekao
+  if (tokenStatus === 'EXPIRED') {
     return (
       <AuthPageLayout>
         <div className="mx-auto max-w-[440px] animate-fade-up">
           <Card className="shadow-2xl shadow-indigo-500/5">
-            <CardContent className="p-6 text-center">
-              <Alert variant="destructive">
-                <AlertDescription>
-                  Nevažeći link za aktivaciju. Kontaktirajte vašeg administratora.
-                </AlertDescription>
-              </Alert>
+            <CardHeader className="text-center space-y-2">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-500/30">
+                <Clock className="h-7 w-7 text-amber-500" />
+              </div>
+              <CardTitle className="text-xl">Link za aktivaciju je istekao</CardTitle>
+              <CardDescription>
+                Aktivacioni link traje 24 sata. Vasa veza vise nije validna.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3" data-testid="activation-token-expired">
+              <p className="text-sm text-muted-foreground text-center">
+                Kontaktirajte vaseg administratora da vam posalje novi aktivacioni link.
+              </p>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/login')}>
+                Nazad na prijavu
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -81,6 +140,92 @@ export default function ActivateAccountPage() {
     );
   }
 
+  // Spec Sc 9 + ad-hoc bag — token je vec iskorisen (najcesce: refresh stranice
+  // posle uspesne aktivacije, ili klik na isti email link drugi put).
+  if (tokenStatus === 'USED' || tokenStatus === 'ALREADY_ACTIVE') {
+    const isAlreadyActive = tokenStatus === 'ALREADY_ACTIVE';
+    return (
+      <AuthPageLayout>
+        <div className="mx-auto max-w-[440px] animate-fade-up">
+          <Card className="shadow-2xl shadow-indigo-500/5">
+            <CardHeader className="text-center space-y-2">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/30">
+                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+              </div>
+              <CardTitle className="text-xl">
+                {isAlreadyActive ? 'Nalog je vec aktivan' : 'Link je vec iskoriscen'}
+              </CardTitle>
+              <CardDescription>
+                {isAlreadyActive
+                  ? 'Vas nalog je vec aktiviran. Prijavite se sa email-om i lozinkom.'
+                  : 'Aktivacioni link je vec iskoriscen. Mozete se odmah prijaviti.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3" data-testid={isAlreadyActive ? 'activation-already-active' : 'activation-token-used'}>
+              {tokenEmail && (
+                <Alert>
+                  <KeySquare className="h-4 w-4" />
+                  <AlertTitle>Email naloga</AlertTitle>
+                  <AlertDescription className="font-mono">{tokenEmail}</AlertDescription>
+                </Alert>
+              )}
+              <p className="text-sm text-muted-foreground text-center">
+                Ako ste zaboravili lozinku, koristite opciju "Zaboravili ste lozinku" na prijavi.
+              </p>
+              <Button
+                className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold"
+                onClick={() => navigate('/login')}
+              >
+                Idi na prijavu
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </AuthPageLayout>
+    );
+  }
+
+  if (tokenStatus === 'INVALID' || !token) {
+    return (
+      <AuthPageLayout>
+        <div className="mx-auto max-w-[440px] animate-fade-up">
+          <Card className="shadow-2xl shadow-indigo-500/5">
+            <CardHeader className="text-center space-y-2">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 ring-1 ring-red-500/30">
+                <AlertTriangle className="h-7 w-7 text-red-500" />
+              </div>
+              <CardTitle className="text-xl">Nevazeci link za aktivaciju</CardTitle>
+              <CardDescription>
+                Aktivacioni token ne postoji u sistemu. Kontaktirajte administratora za novi link.
+              </CardDescription>
+            </CardHeader>
+            <CardContent data-testid="activation-token-invalid">
+              <Button variant="outline" className="w-full" onClick={() => navigate('/login')}>
+                Nazad na prijavu
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </AuthPageLayout>
+    );
+  }
+
+  if (tokenStatus === 'CHECKING') {
+    return (
+      <AuthPageLayout>
+        <div className="mx-auto max-w-[440px] animate-fade-up">
+          <Card className="shadow-2xl shadow-indigo-500/5">
+            <CardContent className="p-10 text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="mt-3 text-sm text-muted-foreground">Provera linka za aktivaciju...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </AuthPageLayout>
+    );
+  }
+
+  // tokenStatus === 'VALID' — renderujemo formu
   return (
     <AuthPageLayout>
       <div className="mx-auto w-full max-w-[480px] animate-fade-up">
@@ -98,9 +243,9 @@ export default function ActivateAccountPage() {
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/30">
                   <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                 </div>
-                <h3 className="text-lg font-semibold">Nalog uspešno aktiviran!</h3>
+                <h3 className="text-lg font-semibold">Nalog uspesno aktiviran!</h3>
                 <p className="text-sm text-muted-foreground">
-                  Sada se možete prijaviti sa vašim email-om i lozinkom.
+                  Sada se mozete prijaviti sa vasim email-om i lozinkom.
                 </p>
                 <Button
                   className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold"
@@ -115,6 +260,16 @@ export default function ActivateAccountPage() {
                   <Alert variant="destructive" className="mb-4">
                     <AlertDescription>{serverError}</AlertDescription>
                   </Alert>
+                )}
+
+                {tokenEmail && (
+                  <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 flex items-center gap-2">
+                    <KeySquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <p className="text-xs">
+                      <span className="text-muted-foreground">Aktivira se nalog: </span>
+                      <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{tokenEmail}</span>
+                    </p>
+                  </div>
                 )}
 
                 <div className="mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
@@ -148,7 +303,7 @@ export default function ActivateAccountPage() {
                       <div className="space-y-1">
                         <Progress value={strength} className="h-1.5" indicatorClassName={strengthInfo.color} />
                         <p className="text-xs text-muted-foreground">
-                          Jačina lozinke: <span className="font-medium">{strengthInfo.label}</span>
+                          Jacina lozinke: <span className="font-medium">{strengthInfo.label}</span>
                         </p>
                       </div>
                     )}

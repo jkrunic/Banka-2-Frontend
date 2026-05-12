@@ -101,7 +101,11 @@ describe('EmployeeEditPage', () => {
     // Check that form fields have the correct values
     expect(screen.getByLabelText(/^ime$/i)).toHaveValue('Marko');
     expect(screen.getByLabelText(/^prezime$/i)).toHaveValue('Petrovic');
-    expect(screen.getByLabelText(/^email$/i)).toHaveValue('marko.petrovic@banka.rs');
+    // Bug T1-009 fix (12.05.2026): label sad sadrzi "(ne moze se menjati)" pa
+    // koristimo broader regex koji match-uje pocetak label-a.
+    expect(screen.getByLabelText(/^email/i)).toHaveValue('marko.petrovic@banka.rs');
+    expect(screen.getByLabelText(/^email/i)).toBeDisabled();
+    expect(screen.getByTestId('employee-edit-email-disabled')).toBeInTheDocument();
     expect(screen.getByLabelText(/^broj telefona$/i)).toHaveValue('+381 60 1234567');
     expect(screen.getByLabelText(/^adresa$/i)).toHaveValue('Bulevar Mihajla Pupina 10, Beograd');
 

@@ -21,6 +21,8 @@ import {
   ArrowDown,
   SlidersHorizontal,
   Orbit,
+  X,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import type { Listing, PaginatedResponse, Exchange } from '@/types/celina3';
@@ -141,6 +143,15 @@ export default function SecuritiesListPage() {
   const [data, setData] = useState<PaginatedResponse<Listing> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Spec Sc 16/17 (Bug T4-004/T4-005 prijavljen 12.05.2026):
+  //   Sc 16: "klikne na osvezavanje podataka → prikazuje se novo vreme
+  //          poslednjeg osvezavanja"
+  //   Sc 17: "prodje definisani vremenski interval bez korisničke akcije →
+  //          podaci se automatski osvezavaju"
+  // lastRefreshAt belezi kad je poslednji uspesan fetch zavrsen — auto refresh
+  // svakih 30s + klik na "Osvezi cene" oba azuriraju ovu vrednost.
+  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
+  const AUTO_REFRESH_MS = 30_000;
 
   // Advanced filters
   const [showFilters, setShowFilters] = useState(false);
@@ -190,13 +201,15 @@ export default function SecuritiesListPage() {
   const priceRangeError = debouncedFilters.priceMin && debouncedFilters.priceMax
     && Number(debouncedFilters.priceMin) > Number(debouncedFilters.priceMax);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     if (priceRangeError) {
       setData({ content: [], totalPages: 0, totalElements: 0, number: 0, size: PAGE_SIZE } as PaginatedResponse<Listing>);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Auto-refresh poziv ide "silent" — ne flashujemo skeleton (lose UX da
+    // tabela treperi svakih 30s).
+    if (!opts?.silent) setLoading(true);
     try {
       const filters: Record<string, string | number> = {};
       if (debouncedFilters.exchangePrefix) filters.exchangePrefix = debouncedFilters.exchangePrefix;
@@ -208,15 +221,37 @@ export default function SecuritiesListPage() {
       const result = await listingService.getAll(activeTab, debouncedSearch, page, PAGE_SIZE,
         Object.keys(filters).length > 0 ? filters as Parameters<typeof listingService.getAll>[4] : undefined);
       setData(result);
+      setLastRefreshAt(new Date());
     } catch {
-      toast.error('Greska pri ucitavanju hartija od vrednosti');
+      if (!opts?.silent) toast.error('Greska pri ucitavanju hartija od vrednosti');
       setData({ content: [], totalPages: 0, totalElements: 0, number: 0, size: PAGE_SIZE } as PaginatedResponse<Listing>);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [activeTab, debouncedSearch, debouncedFilters, page, priceRangeError]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Spec Sc 17 (Bug T4-005): auto-refresh svakih 30s bez korisnicke akcije.
+  // Skipuje refresh kad je 3D globe view aktivan (drugacija stranica) i kad
+  // je tab promenjen (fetchData ce sam odraditi).
+  useEffect(() => {
+    if (showGlobe) return;
+    const interval = setInterval(() => {
+      fetchData({ silent: true });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [fetchData, showGlobe, AUTO_REFRESH_MS]);
+
+  // Formatirana relativna vremenska oznaka poslednjeg osvezavanja
+  const lastRefreshLabel = useMemo(() => {
+    if (!lastRefreshAt) return null;
+    return lastRefreshAt.toLocaleTimeString('sr-RS', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }, [lastRefreshAt]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -228,7 +263,8 @@ export default function SecuritiesListPage() {
       toast.error('Greska pri osvezavanju cena. Pokusajte ponovo.');
     } finally {
       setRefreshing(false);
-      fetchData();
+      await fetchData();
+      // fetchData je vec postavio lastRefreshAt; ovde nista dodatno.
     }
   };
 
@@ -328,6 +364,17 @@ export default function SecuritiesListPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Spec Sc 16 (Bug T4-004): "prikazuje se novo vreme poslednjeg osvezavanja" */}
+          {lastRefreshLabel && (
+            <span
+              className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono"
+              title="Vreme poslednjeg osvezavanja"
+              data-testid="securities-last-refresh"
+            >
+              <Clock className="h-3 w-3" />
+              Poslednje osvezeno: {lastRefreshLabel}
+            </span>
+          )}
           <Button
             variant={showFilters ? 'secondary' : 'outline'}
             size="sm"
@@ -344,6 +391,7 @@ export default function SecuritiesListPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               className="gap-2"
+              data-testid="securities-refresh-btn"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               Osvezi cene
@@ -472,8 +520,24 @@ export default function SecuritiesListPage() {
               placeholder="Pretrazi po ticker-u ili nazivu..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 bg-muted/30 dark:bg-slate-800/40 border-border/50"
+              className="pl-10 pr-10 bg-muted/30 dark:bg-slate-800/40 border-border/50"
+              data-testid="securities-search-input"
             />
+            {/* Spec Sc 13 (Bug T4-003 prijavljen 12.05.2026): "Obrisi pretragu"
+                dugme kad search ima sadrzaj. Klik resetuje filter i prikazuje
+                celokupnu listu. */}
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                title="Obrisi pretragu"
+                aria-label="Obrisi pretragu"
+                data-testid="securities-clear-search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         )}
       </div>

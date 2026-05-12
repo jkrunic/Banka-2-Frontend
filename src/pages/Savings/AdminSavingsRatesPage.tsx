@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import PageHeader from '@/components/shared/PageHeader';
 import { savingsService } from '@/services/savingsService';
-import { SavingsRateDto, TERM_OPTIONS } from '@/types/savings';
+import { type SavingsRateDto, TERM_OPTIONS } from '@/types/savings';
 import {
   Table,
   TableHeader,

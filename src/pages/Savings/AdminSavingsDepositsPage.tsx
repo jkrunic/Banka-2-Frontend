@@ -9,9 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import PageHeader from '@/components/shared/PageHeader';
 import { savingsService } from '@/services/savingsService';
 import {
-  SavingsDepositDto,
-  PageDto,
-  SavingsDepositStatus,
+  type SavingsDepositDto,
+  type PageDto,
+  type SavingsDepositStatus,
   STATUS_LABEL_SR,
 } from '@/types/savings';
 import {

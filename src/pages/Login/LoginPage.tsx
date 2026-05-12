@@ -13,10 +13,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import AuthPageLayout from '@/components/layout/AuthPageLayout';
 
 // Opc.2 — Account lockout: BE AccountLockoutService zakljuca email posle 5
-// neuspesnih pokusaja na 15 min. BE poruka pocinje sa "Account temporarily
-// locked" — FE detektuje tu prefix-iranu poruku i prikazuje specifican
-// crveni alert sa Lock ikonicom (umesto generickog "Pogrešan email").
-const LOCKOUT_PREFIX = 'Account temporarily locked';
+// neuspesnih pokusaja na 15 min. BE poruka pocinje sa "Nalog je privremeno
+// zakljucan" (SR — pre 12.05.2026 bila je engleska, Bug T1-017). FE detektuje
+// tu prefix-iranu poruku i prikazuje specifican amber alert sa Lock ikonicom
+// (umesto generickog "Pogresan email").
+const LOCKOUT_PREFIXES = ['Nalog je privremeno zakljucan', 'Account temporarily locked'];
+
+function isLockoutMessage(msg: string): boolean {
+  return LOCKOUT_PREFIXES.some((prefix) => msg.startsWith(prefix));
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,6 +35,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -45,15 +51,21 @@ export default function LoginPage() {
       navigate('/home');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } }; message?: string };
-      // Opc.2 — BE AccountLockoutService.AccountLockedException puca sa porukom
-      // pocinjucom "Account temporarily locked due to too many failed attempts;
-      // try again in N min". FE detektuje ovaj prefix i prikazuje lockout alert.
       const beMessage = error.response?.data?.message ?? error.message ?? '';
-      if (beMessage.startsWith(LOCKOUT_PREFIX)) {
+      // Spec Sc 2 (Bug T1-013 prijavljen 12.05.2026): polje "Lozinka" se mora
+      // ocistiti posle neuspesnog login-a. Email ostavljamo da korisnik ne mora
+      // ponovo da kuca. setValue iz react-hook-form-a triggeruje re-render +
+      // ocisti DOM input value.
+      setValue('password', '', { shouldValidate: false, shouldDirty: false });
+      // Opc.2 — BE AccountLockoutService.AccountLockedException puca sa porukom
+      // koja pocinje "Nalog je privremeno zakljucan..." (od 12.05.2026; pre toga
+      // bila je engleska "Account temporarily locked"). FE detektuje prefix u
+      // oba jezika radi backwards-compat i prikazuje amber lockout alert.
+      if (isLockoutMessage(beMessage)) {
         setIsLocked(true);
         setServerError(beMessage);
       } else {
-        setServerError(beMessage || 'Pogrešan email ili lozinka. Pokušajte ponovo.');
+        setServerError(beMessage || 'Neispravan email ili lozinka. Pokusajte ponovo.');
       }
     } finally {
       setIsSubmitting(false);
@@ -91,7 +103,7 @@ export default function LoginPage() {
                   <Lock className="h-4 w-4" />
                   <AlertTitle>Nalog je privremeno zakljucan</AlertTitle>
                   <AlertDescription>
-                    {serverError} Pokusajte ponovo kasnije ili koristite "Zaboravili ste lozinku".
+                    Vise neuspesnih pokusaja je detektovano. Pokusajte ponovo kasnije ili koristite "Zaboravili ste lozinku".
                   </AlertDescription>
                 </Alert>
               ) : (

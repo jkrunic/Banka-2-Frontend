@@ -78,7 +78,10 @@ export default function SavingsNewDepositPage() {
     () => accounts.find(a => a.id === sourceAccountId),
     [accounts, sourceAccountId]
   );
-  const currencyCode = sourceAccount?.currency?.code ?? 'RSD';
+  // Account.currency je tipa Currency (string union "RSD"/"EUR"/...), nije objekat.
+  // Fix 12.05.2026 vece: pre fix-a sourceAccount.currency.code je radjeno kao
+  // da je objekat sto je TS error sa verbatimModuleSyntax.
+  const currencyCode = sourceAccount?.currency ?? 'RSD';
   const minAmount = MIN_DEPOSIT_AMOUNT[currencyCode] ?? 100;
 
   const annualRate = useMemo(() => {
@@ -118,7 +121,7 @@ export default function SavingsNewDepositPage() {
     }
   };
 
-  const sameAccountOptions = accounts.filter(a => a.currency?.code === currencyCode);
+  const sameAccountOptions = accounts.filter(a => a.currency === currencyCode);
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -150,7 +153,7 @@ export default function SavingsNewDepositPage() {
               <option value="">-- Izaberi --</option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.accountNumber} ({a.currency.code}) — {a.availableBalance.toFixed(2)}
+                  {a.accountNumber} ({a.currency}) — {a.availableBalance.toFixed(2)}
                 </option>
               ))}
             </select>

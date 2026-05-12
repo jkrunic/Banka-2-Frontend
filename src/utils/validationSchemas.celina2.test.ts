@@ -298,28 +298,34 @@ describe('REPAYMENT_PERIODS', () => {
 });
 
 describe('createAccountSchema', () => {
-  const validTekuci = {
+  // Spec Celina 2 §41-42 + Bug T2-001/T2-002 (12.05.2026): "Tip vlasnistva"
+  // (LICNI/POSLOVNI) i "Tip racuna" (TEKUCI/DEVIZNI) su DVA ORTOGONALNA polja.
+  // Pre 12.05.2026 jedan dropdown je mesao oba u TEKUCI/DEVIZNI/POSLOVNI sto
+  // je onemogucavalo kombinaciju "Poslovni + Devizni". Sad imamo odvojena polja.
+  const validLicniTekuci = {
     ownerEmail: 'test@banka.rs',
+    ownershipType: 'LICNI' as const,
     accountType: 'TEKUCI' as const,
     accountSubtype: 'STANDARDNI',
     currency: 'RSD',
   };
 
-  it('accepts valid TEKUCI account', () => {
-    expect(createAccountSchema.safeParse(validTekuci).success).toBe(true);
+  it('accepts valid LICNI + TEKUCI account', () => {
+    expect(createAccountSchema.safeParse(validLicniTekuci).success).toBe(true);
   });
 
   it('rejects TEKUCI with non-RSD currency', () => {
-    expect(createAccountSchema.safeParse({ ...validTekuci, currency: 'EUR' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, currency: 'EUR' }).success).toBe(false);
   });
 
-  it('rejects TEKUCI with business subtype', () => {
-    expect(createAccountSchema.safeParse({ ...validTekuci, accountSubtype: 'DOO' }).success).toBe(false);
+  it('rejects LICNI with business subtype (DOO)', () => {
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, accountSubtype: 'DOO' }).success).toBe(false);
   });
 
-  it('accepts valid DEVIZNI account', () => {
+  it('accepts valid LICNI + DEVIZNI account', () => {
     expect(createAccountSchema.safeParse({
       ownerEmail: 'test@banka.rs',
+      ownershipType: 'LICNI',
       accountType: 'DEVIZNI',
       accountSubtype: 'STANDARDNI',
       currency: 'EUR',
@@ -329,24 +335,27 @@ describe('createAccountSchema', () => {
   it('rejects DEVIZNI with RSD currency', () => {
     expect(createAccountSchema.safeParse({
       ownerEmail: 'test@banka.rs',
+      ownershipType: 'LICNI',
       accountType: 'DEVIZNI',
       accountSubtype: 'STANDARDNI',
       currency: 'RSD',
     }).success).toBe(false);
   });
 
-  it('rejects DEVIZNI with business subtype', () => {
+  it('rejects LICNI + DEVIZNI with business subtype', () => {
     expect(createAccountSchema.safeParse({
       ownerEmail: 'test@banka.rs',
+      ownershipType: 'LICNI',
       accountType: 'DEVIZNI',
       accountSubtype: 'DOO',
       currency: 'EUR',
     }).success).toBe(false);
   });
 
-  const validPoslovni = {
+  const validPoslovniTekuci = {
     ownerEmail: 'firma@banka.rs',
-    accountType: 'POSLOVNI' as const,
+    ownershipType: 'POSLOVNI' as const,
+    accountType: 'TEKUCI' as const,
     accountSubtype: 'DOO',
     currency: 'RSD',
     companyName: 'Test DOO',
@@ -358,58 +367,82 @@ describe('createAccountSchema', () => {
     firmCountry: 'Srbija',
   };
 
-  it('accepts valid POSLOVNI account', () => {
-    expect(createAccountSchema.safeParse(validPoslovni).success).toBe(true);
+  it('accepts valid POSLOVNI + TEKUCI account', () => {
+    expect(createAccountSchema.safeParse(validPoslovniTekuci).success).toBe(true);
+  });
+
+  // Spec §41-42: ortogonalna kombinacija Poslovni + Devizni mora biti dozvoljena.
+  // Pre fix-a 12.05.2026 nije bila moguca jer je accountType bio jedan dropdown.
+  it('accepts valid POSLOVNI + DEVIZNI account (T2-002 fix)', () => {
+    expect(createAccountSchema.safeParse({
+      ...validPoslovniTekuci,
+      accountType: 'DEVIZNI',
+      currency: 'EUR',
+    }).success).toBe(true);
   });
 
   it('rejects POSLOVNI without companyName', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, companyName: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, companyName: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without registrationNumber', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, registrationNumber: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, registrationNumber: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without taxId', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, taxId: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, taxId: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without activityCode', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, activityCode: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, activityCode: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI with invalid activityCode format', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, activityCode: '6201' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, activityCode: '6201' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without firmAddress', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, firmAddress: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, firmAddress: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without firmCity', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, firmCity: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, firmCity: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI without firmCountry', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, firmCountry: '' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, firmCountry: '' }).success).toBe(false);
   });
 
   it('rejects POSLOVNI with personal subtype', () => {
-    expect(createAccountSchema.safeParse({ ...validPoslovni, accountSubtype: 'STANDARDNI' }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validPoslovniTekuci, accountSubtype: 'STANDARDNI' }).success).toBe(false);
   });
 
   it('accepts optional initialDeposit', () => {
-    expect(createAccountSchema.safeParse({ ...validTekuci, initialDeposit: 5000 }).success).toBe(true);
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, initialDeposit: 5000 }).success).toBe(true);
   });
 
   it('rejects negative initialDeposit', () => {
-    expect(createAccountSchema.safeParse({ ...validTekuci, initialDeposit: -100 }).success).toBe(false);
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, initialDeposit: -100 }).success).toBe(false);
+  });
+
+  // Bug T2-003 (12.05.2026): polja za dnevni i mesecni limit.
+  it('accepts optional dailyLimit and monthlyLimit', () => {
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, dailyLimit: 250000, monthlyLimit: 1000000 }).success).toBe(true);
+  });
+
+  it('rejects negative dailyLimit', () => {
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, dailyLimit: -100 }).success).toBe(false);
+  });
+
+  it('rejects dailyLimit greater than monthlyLimit', () => {
+    expect(createAccountSchema.safeParse({ ...validLicniTekuci, dailyLimit: 2_000_000, monthlyLimit: 1_000_000 }).success).toBe(false);
   });
 
   it('accepts DEVIZNI with all foreign currencies', () => {
     for (const cur of ['EUR', 'CHF', 'USD', 'GBP', 'JPY', 'CAD', 'AUD']) {
       expect(createAccountSchema.safeParse({
         ownerEmail: 'test@banka.rs',
+        ownershipType: 'LICNI',
         accountType: 'DEVIZNI',
         accountSubtype: 'STANDARDNI',
         currency: cur,
@@ -417,9 +450,9 @@ describe('createAccountSchema', () => {
     }
   });
 
-  it('accepts all personal subtypes for TEKUCI', () => {
+  it('accepts all personal subtypes for LICNI + TEKUCI', () => {
     for (const sub of ['STANDARDNI', 'STEDNI', 'PENZIONERSKI', 'ZA_MLADE', 'STUDENTSKI', 'ZA_NEZAPOSLENE']) {
-      expect(createAccountSchema.safeParse({ ...validTekuci, accountSubtype: sub }).success).toBe(true);
+      expect(createAccountSchema.safeParse({ ...validLicniTekuci, accountSubtype: sub }).success).toBe(true);
     }
   });
 });

@@ -148,13 +148,24 @@ const personalSubtypes = ['STANDARDNI', 'STEDNI', 'PENZIONERSKI', 'ZA_MLADE', 'S
 const businessSubtypes = ['DOO', 'AD', 'FONDACIJA'];
 const foreignCurrencies = ['EUR', 'CHF', 'USD', 'GBP', 'JPY', 'CAD', 'AUD'];
 
+// Spec Celina 2 §41-42 + Bug T2-001/T2-002 (prijavljen 12.05.2026):
+// Tip vlasnistva (LICNI/POSLOVNI) i Tip racuna (TEKUCI/DEVIZNI) su
+// DVA ORTOGONALNA KONCEPTA. Pre fix-a forma je mesala oba u jedan
+// dropdown sa vrednostima TEKUCI/DEVIZNI/POSLOVNI, sto je
+// onemogucavalo kombinaciju (npr. Poslovni + Devizni). Sad imamo
+// odvojena polja.
 export const createAccountSchema = z
   .object({
     ownerEmail: emailSchema,
-    accountType: z.enum(['TEKUCI', 'DEVIZNI', 'POSLOVNI'], { message: 'Izaberite tip racuna' }),
+    ownershipType: z.enum(['LICNI', 'POSLOVNI'], { message: 'Izaberite tip vlasnistva' }),
+    accountType: z.enum(['TEKUCI', 'DEVIZNI'], { message: 'Izaberite tip racuna' }),
     accountSubtype: z.string().min(1, 'Izaberite podvrstu racuna'),
     currency: z.string().min(1, 'Izaberite valutu'),
     initialDeposit: z.number().min(0, 'Depozit ne moze biti negativan').max(999999999999.99, 'Depozit prelazi maksimalnu dozvoljenu vrednost').optional(),
+    // Bug T2-003: Plan_Manuelnog_Testiranja.pdf trazi polje za limite pri
+    // kreiranju. Default-i (250k dnevni / 1M mesecni) iz Celina 2 tabele.
+    dailyLimit: z.number().min(0, 'Limit ne moze biti negativan').optional(),
+    monthlyLimit: z.number().min(0, 'Limit ne moze biti negativan').optional(),
     createCard: z.boolean().optional(),
     // Polja za poslovni racun - firma
     companyName: z.string().optional(),
@@ -170,28 +181,27 @@ export const createAccountSchema = z
     firmCountry: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.accountType === 'TEKUCI') {
-      if (!personalSubtypes.includes(data.accountSubtype)) {
-        ctx.addIssue({ code: 'custom', path: ['accountSubtype'], message: 'Neispravna podvrsta za tekuci racun' });
-      }
-      if (data.currency !== 'RSD') {
-        ctx.addIssue({ code: 'custom', path: ['currency'], message: 'Tekuci racun moze biti samo u RSD valuti' });
-      }
+    // Validacija podvrste i valute na osnovu kombinacije ownershipType x accountType.
+    const isLicni = data.ownershipType === 'LICNI';
+    const isPoslovni = data.ownershipType === 'POSLOVNI';
+    const isTekuci = data.accountType === 'TEKUCI';
+    const isDevizni = data.accountType === 'DEVIZNI';
+
+    if (isLicni && !personalSubtypes.includes(data.accountSubtype)) {
+      ctx.addIssue({ code: 'custom', path: ['accountSubtype'], message: 'Neispravna podvrsta za licni racun' });
+    }
+    if (isPoslovni && !businessSubtypes.includes(data.accountSubtype)) {
+      ctx.addIssue({ code: 'custom', path: ['accountSubtype'], message: 'Neispravna podvrsta za poslovni racun' });
     }
 
-    if (data.accountType === 'DEVIZNI') {
-      if (!personalSubtypes.includes(data.accountSubtype)) {
-        ctx.addIssue({ code: 'custom', path: ['accountSubtype'], message: 'Neispravna podvrsta za devizni racun' });
-      }
-      if (!foreignCurrencies.includes(data.currency)) {
-        ctx.addIssue({ code: 'custom', path: ['currency'], message: 'Devizni racun podrzava samo strane valute' });
-      }
+    if (isTekuci && data.currency !== 'RSD') {
+      ctx.addIssue({ code: 'custom', path: ['currency'], message: 'Tekuci racun moze biti samo u RSD valuti' });
+    }
+    if (isDevizni && !foreignCurrencies.includes(data.currency)) {
+      ctx.addIssue({ code: 'custom', path: ['currency'], message: 'Devizni racun podrzava samo strane valute' });
     }
 
-    if (data.accountType === 'POSLOVNI') {
-      if (!businessSubtypes.includes(data.accountSubtype)) {
-        ctx.addIssue({ code: 'custom', path: ['accountSubtype'], message: 'Neispravna podvrsta za poslovni racun' });
-      }
+    if (isPoslovni) {
       if (!data.companyName?.trim()) {
         ctx.addIssue({ code: 'custom', path: ['companyName'], message: 'Naziv firme je obavezan' });
       }
@@ -213,6 +223,10 @@ export const createAccountSchema = z
       if (!data.firmCountry?.trim()) {
         ctx.addIssue({ code: 'custom', path: ['firmCountry'], message: 'Drzava firme je obavezna' });
       }
+    }
+
+    if (data.dailyLimit != null && data.monthlyLimit != null && data.dailyLimit > data.monthlyLimit) {
+      ctx.addIssue({ code: 'custom', path: ['dailyLimit'], message: 'Dnevni limit ne moze biti veci od mesecnog limita' });
     }
   });
 export type CreateAccountFormData = z.infer<typeof createAccountSchema>;

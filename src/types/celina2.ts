@@ -320,6 +320,10 @@ export interface CreateAccountRequest {
   currency: Currency;
   initialDeposit?: number;
   createCard?: boolean;          // Checkbox "Napravi karticu"
+  // Spec Celina 2 §454-455 + Bug T2-003 (12.05.2026): inicijalni limiti
+  // koje zaposleni moze podesiti pri kreiranju. Default-i 250k / 1M.
+  dailyLimit?: number;
+  monthlyLimit?: number;
   // Za poslovni racun - podaci o firmi
   companyName?: string;
   registrationNumber?: string;

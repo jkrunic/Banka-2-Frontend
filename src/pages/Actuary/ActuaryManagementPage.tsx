@@ -26,12 +26,18 @@ type FilterState = {
   email: string;
   firstName: string;
   lastName: string;
+  // Spec Celina 3 §69 (Bug T4-001 prijavljen 11.05.2026): "filtere po
+  // email-u, imenu, prezimenu i poziciji". Pozicija je nedostajala — sad
+  // dodajemo i sluzi za filtriranje po nazivu pozicije (Agent / Supervizor
+  // / specificno radno mesto ako se kasnije unese).
+  position: string;
 };
 
 const DEFAULT_FILTERS: FilterState = {
   email: '',
   firstName: '',
   lastName: '',
+  position: '',
 };
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -76,13 +82,34 @@ export default function ActuaryManagementPage() {
         debouncedFilters.firstName || undefined,
         debouncedFilters.lastName || undefined
       );
-      setAgents(data);
+      // BE actuary endpoint trenutno filtrira po email/firstName/lastName;
+      // poziciju filtriramo na FE strani da Bug T4-001 odmah bude resen
+      // bez BE izmene. Pozicija agenta dolazi kroz `agent.actuaryType`
+      // (SUPERVISOR / AGENT) i/ili `agent.employeePosition` ako BE pruzi.
+      const positionQuery = debouncedFilters.position.trim().toLowerCase();
+      const filtered = positionQuery
+        ? data.filter((agent) => {
+            const positionLabel =
+              agent.actuaryType === 'SUPERVISOR' ? 'supervizor' : 'agent';
+            const empPosition = (
+              (agent as ActuaryInfo & { employeePosition?: string }).employeePosition ?? ''
+            ).toLowerCase();
+            return positionLabel.includes(positionQuery)
+                || empPosition.includes(positionQuery);
+          })
+        : data;
+      setAgents(filtered);
     } catch {
       setError('Greska pri ucitavanju aktuarnih podataka. Pokusajte ponovo.');
     } finally {
       setLoading(false);
     }
-  }, [debouncedFilters.email, debouncedFilters.firstName, debouncedFilters.lastName]);
+  }, [
+    debouncedFilters.email,
+    debouncedFilters.firstName,
+    debouncedFilters.lastName,
+    debouncedFilters.position,
+  ]);
 
   useEffect(() => {
     void loadAgents();
@@ -235,6 +262,18 @@ export default function ActuaryManagementPage() {
                 value={filters.lastName}
                 onChange={(e) => setFilters((current) => ({ ...current, lastName: e.target.value }))}
                 className="w-[230px] pl-9"
+              />
+            </div>
+            {/* Spec §69 (Bug T4-001): filter po poziciji (Agent / Supervizor /
+                tekstualni opis radnog mesta) */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Pretraga po poziciji"
+                value={filters.position}
+                onChange={(e) => setFilters((current) => ({ ...current, position: e.target.value }))}
+                className="w-[230px] pl-9"
+                data-testid="actuary-filter-position"
               />
             </div>
             <Button variant="ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>

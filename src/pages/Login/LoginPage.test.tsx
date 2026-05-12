@@ -143,7 +143,10 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: /prijavi se/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/pogrešan email ili lozinka/i)).toBeInTheDocument();
+      // Posle Bug T1-013 fix-a (12.05.2026) poruka je preformulisana: pre je
+      // bila "Pogrešan email ili lozinka", sad "Neispravan email ili lozinka."
+      // (uskladjeno sa BE porukom koja je takodje SR).
+      expect(screen.getByText(/neispravan email ili lozinka/i)).toBeInTheDocument();
     });
   });
 

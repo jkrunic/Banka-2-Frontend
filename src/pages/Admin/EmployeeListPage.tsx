@@ -10,16 +10,21 @@ import {
   ChevronRight,
   UserCheck,
   UserX,
+  PowerOff,
+  Power,
+  Loader2,
 } from 'lucide-react';
 import type { Employee, EmployeeFilters } from '../../types';
 import { Permission } from '../../types';
 import { employeeService } from '../../services/employeeService';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import * as Dialog from '@radix-ui/react-dialog';
 import {
   Table,
   TableBody,
@@ -72,6 +77,15 @@ export default function EmployeeListPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
+  // Spec Sc 14 (Bug T1-011 prijavljen 12.05.2026): "Pored zeljenog zaposlenog
+  // klik na 'Deaktiviraj' (ikona X ili switch)". Pre fix-a, deaktivacija je
+  // bila dostupna SAMO unutar edit forme preko isActive switch-a. Sad dodajemo
+  // row-level dugme u koloni Akcije sa confirm dialog-om.
+  const [confirmAction, setConfirmAction] = useState<{
+    employee: Employee;
+    nextActive: boolean;
+  } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -112,6 +126,46 @@ export default function EmployeeListPage() {
   const handleRowClick = (employee: Employee) => {
     if (canEdit(employee)) {
       navigate(`/admin/employees/${employee.id}`);
+    }
+  };
+
+  /**
+   * Spec Sc 14: deaktivacija sa liste. Otvara confirm dialog pre BE poziva
+   * jer je promena destruktivna (deaktiviran zaposleni ne moze da se uloguje).
+   * Ako se zaposleni reaktivira, isti flow (Power umesto PowerOff ikone).
+   */
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return;
+    const { employee, nextActive } = confirmAction;
+    setActionLoading(true);
+    try {
+      if (nextActive) {
+        // Reaktivacija — koristimo update sa { isActive: true }
+        await employeeService.update(employee.id, {
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          dateOfBirth: employee.dateOfBirth,
+          gender: employee.gender,
+          phoneNumber: employee.phoneNumber,
+          address: employee.address,
+          position: employee.position,
+          department: employee.department,
+          isActive: true,
+          permissions: employee.permissions,
+        });
+        toast.success(`Zaposleni ${employee.firstName} ${employee.lastName} je reaktiviran.`);
+      } else {
+        await employeeService.deactivate(employee.id);
+        toast.success(`Zaposleni ${employee.firstName} ${employee.lastName} je deaktiviran.`);
+      }
+      setConfirmAction(null);
+      await fetchEmployees();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Operacija nije uspela. Pokusajte ponovo.';
+      toast.error(msg);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -252,7 +306,7 @@ export default function EmployeeListPage() {
                 <TableHead>Telefon</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Uloga</TableHead>
-                <TableHead className="text-center w-16">Akcije</TableHead>
+                <TableHead className="text-center w-28">Akcije</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -265,7 +319,7 @@ export default function EmployeeListPage() {
                   <TableCell><div className="h-4 w-24 animate-pulse rounded bg-muted" /></TableCell>
                   <TableCell><div className="h-4 w-4 rounded-full bg-muted animate-pulse" /></TableCell>
                   <TableCell><div className="h-4 w-20 animate-pulse rounded bg-muted" /></TableCell>
-                  <TableCell className="text-center"><div className="mx-auto h-8 w-8 rounded-lg bg-muted animate-pulse" /></TableCell>
+                  <TableCell className="text-center"><div className="mx-auto h-8 w-16 rounded-lg bg-muted animate-pulse" /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -283,7 +337,7 @@ export default function EmployeeListPage() {
                 <TableHead>Telefon</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Uloga</TableHead>
-                <TableHead className="text-center w-16">Akcije</TableHead>
+                <TableHead className="text-center w-28">Akcije</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -342,18 +396,43 @@ export default function EmployeeListPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       {canEdit(emp) && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-lg hover:bg-indigo-500/10 hover:text-indigo-600 transition-all"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/admin/employees/${emp.id}`);
-                          }}
-                          title="Izmeni zaposlenog"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-lg hover:bg-indigo-500/10 hover:text-indigo-600 transition-all"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/employees/${emp.id}`);
+                            }}
+                            title="Izmeni zaposlenog"
+                            data-testid={`employee-edit-btn-${emp.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {/*
+                           * Spec Sc 14 (Bug T1-011): row-level dugme "Deaktiviraj"
+                           * (ili "Aktiviraj" ako je vec neaktivan). Klik otvara confirm
+                           * dialog — destruktivna operacija mora biti potvrdena.
+                           */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-8 w-8 rounded-lg transition-all ${
+                              emp.isActive
+                                ? 'hover:bg-red-500/10 hover:text-red-600'
+                                : 'hover:bg-emerald-500/10 hover:text-emerald-600'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmAction({ employee: emp, nextActive: !emp.isActive });
+                            }}
+                            title={emp.isActive ? 'Deaktiviraj zaposlenog' : 'Reaktiviraj zaposlenog'}
+                            data-testid={`employee-toggle-active-btn-${emp.id}`}
+                          >
+                            {emp.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -412,6 +491,81 @@ export default function EmployeeListPage() {
         </Card>
       )}
 
+      {/* Confirm dialog za deaktivaciju/reaktivaciju (Bug T1-011 fix) */}
+      <Dialog.Root
+        open={confirmAction !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !actionLoading) setConfirmAction(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background shadow-2xl"
+            data-testid="employee-toggle-active-dialog"
+          >
+            {confirmAction && (
+              <>
+                <div className="flex items-start gap-3 border-b p-6">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                    confirmAction.nextActive
+                      ? 'bg-emerald-100 dark:bg-emerald-950/40'
+                      : 'bg-red-100 dark:bg-red-950/40'
+                  }`}>
+                    {confirmAction.nextActive ? (
+                      <Power className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <PowerOff className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Dialog.Title className="text-lg font-semibold">
+                      {confirmAction.nextActive ? 'Reaktivacija zaposlenog' : 'Deaktivacija zaposlenog'}
+                    </Dialog.Title>
+                    <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                      {confirmAction.nextActive
+                        ? `Da li ste sigurni da zelite da reaktivirate ${confirmAction.employee.firstName} ${confirmAction.employee.lastName}? Nakon reaktivacije zaposleni ce moci ponovo da se uloguje.`
+                        : `Da li ste sigurni da zelite da deaktivirate ${confirmAction.employee.firstName} ${confirmAction.employee.lastName}? Deaktivirani zaposleni ne moze da se uloguje na sistem.`}
+                    </Dialog.Description>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 p-6">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmAction(null)}
+                    disabled={actionLoading}
+                  >
+                    Otkazi
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleConfirmAction}
+                    disabled={actionLoading}
+                    className={
+                      confirmAction.nextActive
+                        ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold'
+                        : 'bg-gradient-to-r from-red-500 to-rose-600 text-white font-semibold'
+                    }
+                    data-testid="employee-toggle-active-confirm"
+                  >
+                    {actionLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Cuvanje...
+                      </>
+                    ) : confirmAction.nextActive ? (
+                      'Reaktiviraj'
+                    ) : (
+                      'Deaktiviraj'
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

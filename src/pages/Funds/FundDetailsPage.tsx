@@ -78,6 +78,17 @@ export default function FundDetailsPage() {
   const [investMode, setInvestMode] = useState<null | 'self' | 'bank'>(null);
   const [withdrawMode, setWithdrawMode] = useState<null | 'self' | 'bank'>(null);
 
+  // Refresh fund detalji (KPI kartice: vrednost, likvidnost, profit) — zove se posle
+  // svake invest/withdraw uplate jer reloadPositions samo refresh-uje pozicije klijenta.
+  const reloadFund = async (fundId: number) => {
+    try {
+      const updated = await investmentFundService.get(fundId);
+      setFund(updated);
+    } catch {
+      // tihi fail — UI ostaje na poslednjim vrednostima
+    }
+  };
+
   const reloadPositions = async (fundId: number) => {
     try {
       if (user?.role === 'CLIENT') {
@@ -488,6 +499,7 @@ export default function FundDetailsPage() {
           onClose={() => setInvestMode(null)}
           onSuccess={() => {
             setInvestMode(null);
+            void reloadFund(fund.id);
             void reloadPositions(fund.id);
             toast.success('Uplata uspesno izvrsena.');
           }}
@@ -503,6 +515,7 @@ export default function FundDetailsPage() {
           onClose={() => setWithdrawMode(null)}
           onSuccess={() => {
             setWithdrawMode(null);
+            void reloadFund(fund.id);
             void reloadPositions(fund.id);
             toast.success('Zahtev za povlacenje uspesno poslat.');
           }}

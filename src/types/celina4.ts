@@ -29,6 +29,7 @@ export interface InvestmentFundDetail {
   liquidAmount: number;
   profit: number;
   minimumContribution: number;
+  accountId: number;
   accountNumber: string;
   holdings: FundHolding[];
   performance: FundPerformancePoint[];

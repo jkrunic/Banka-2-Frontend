@@ -11,8 +11,18 @@ import type {
 } from '@/types/celina4';
 
 const investmentFundService = {
-  /** GET /funds?search=X&sort=Y&direction=Z — lista svih fondova za Discovery stranicu. */
-  async list(params?: { search?: string; sort?: string; direction?: string }): Promise<InvestmentFundSummary[]> {
+  /** GET /funds?search=X&sort=Y&direction=Z&minContribution=&maxContribution=&minFundValue=&maxFundValue=&minProfit=&maxProfit= — lista svih fondova za Discovery stranicu. */
+  async list(params?: {
+    search?: string;
+    sort?: string;
+    direction?: string;
+    minContribution?: number;
+    maxContribution?: number;
+    minFundValue?: number;
+    maxFundValue?: number;
+    minProfit?: number;
+    maxProfit?: number;
+  }): Promise<InvestmentFundSummary[]> {
     const { data } = await api.get<InvestmentFundSummary[]>('/funds', { params });
     return data;
   },

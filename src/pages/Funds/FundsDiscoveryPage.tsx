@@ -40,12 +40,37 @@ export default function FundsDiscoveryPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // Numericki filteri (min/max) — string state za UX (prazno polje = bez filtera).
+  const [minContribution, setMinContribution] = useState('');
+  const [maxContribution, setMaxContribution] = useState('');
+  const [minFundValue, setMinFundValue] = useState('');
+  const [maxFundValue, setMaxFundValue] = useState('');
+  const [minProfit, setMinProfit] = useState('');
+  const [maxProfit, setMaxProfit] = useState('');
+  const [debouncedFilters, setDebouncedFilters] = useState({
+    minContribution: '', maxContribution: '',
+    minFundValue: '', maxFundValue: '',
+    minProfit: '', maxProfit: '',
+  });
 
-  // Debounce search
+  // Debounce search + numeric filters (jedan timer za sve da bi se izbegao spam BE poziva)
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setDebouncedFilters({
+        minContribution, maxContribution,
+        minFundValue, maxFundValue,
+        minProfit, maxProfit,
+      });
+    }, 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, minContribution, maxContribution, minFundValue, maxFundValue, minProfit, maxProfit]);
+
+  const parseNum = (s: string): number | undefined => {
+    if (!s.trim()) return undefined;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  };
 
   const fetchFunds = useCallback(async () => {
     setLoading(true);
@@ -54,6 +79,12 @@ export default function FundsDiscoveryPage() {
         search: debouncedSearch || undefined,
         sort: sortBy,
         direction: sortDirection,
+        minContribution: parseNum(debouncedFilters.minContribution),
+        maxContribution: parseNum(debouncedFilters.maxContribution),
+        minFundValue: parseNum(debouncedFilters.minFundValue),
+        maxFundValue: parseNum(debouncedFilters.maxFundValue),
+        minProfit: parseNum(debouncedFilters.minProfit),
+        maxProfit: parseNum(debouncedFilters.maxProfit),
       });
       setFunds(result);
     } catch {
@@ -62,7 +93,7 @@ export default function FundsDiscoveryPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, sortBy, sortDirection]);
+  }, [debouncedSearch, sortBy, sortDirection, debouncedFilters]);
 
   useEffect(() => { fetchFunds(); }, [fetchFunds]);
 
@@ -122,9 +153,9 @@ export default function FundsDiscoveryPage() {
         )}
       </div>
 
-      {/* Search */}
+      {/* Search + numericki filteri */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -133,6 +164,62 @@ export default function FundsDiscoveryPage() {
               onChange={e => setSearch(e.target.value)}
               className="pl-10"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Min. ulog (RSD)</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="od"
+                  value={minContribution}
+                  onChange={e => setMinContribution(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="do"
+                  value={maxContribution}
+                  onChange={e => setMaxContribution(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Vrednost fonda (RSD)</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="od"
+                  value={minFundValue}
+                  onChange={e => setMinFundValue(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="do"
+                  value={maxFundValue}
+                  onChange={e => setMaxFundValue(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Profit (RSD)</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="od"
+                  value={minProfit}
+                  onChange={e => setMinProfit(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="do"
+                  value={maxProfit}
+                  onChange={e => setMaxProfit(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -112,7 +112,11 @@ export default function FundInvestDialog({
       return;
     }
 
-    if (parsedAmount < minimumContribution) {
+    // Min ulog je u RSD; FE moze da preventivno proveri samo kad je racun u RSD.
+    // Za FX racune (EUR/USD/...), BE u InvestmentFundService.invest konvertuje
+    // amount u RSD pre poredjenja sa minimumContribution — prepustamo mu da
+    // odbije ako i posle konverzije ne dostize prag.
+    if (selectedAccount.currency === 'RSD' && parsedAmount < minimumContribution) {
       toast.error(`Minimalni ulog je ${formatAmount(minimumContribution)} RSD.`);
       return;
     }

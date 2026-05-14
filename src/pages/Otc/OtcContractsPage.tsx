@@ -18,11 +18,16 @@ import OtcSourceFilterChip, { type OtcSource } from '@/components/otc/OtcSourceF
 import OtcSubHero from '@/components/otc/OtcSubHero';
 import OtcInterBankContractsTab from './OtcInterBankContractsTab';
 
+// T4A-020 fix: ujednacavanje naziva izmedju filter dropdown-a i statusnih badge-ova.
+// Pre fix-a filter je koristio engleske enum vrednosti, dok su badge-ovi prikazivali
+// srpske labele iz OTC_CONTRACT_STATUS_LABELS. Sad oba koriste isti map.
+const STATUS_LABELS = CONTRACT_STATUS_LABEL;
+
 const STATUS_OPTIONS: Array<{ value: OtcContractStatus | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'Svi' },
-  { value: 'ACTIVE', label: 'ACTIVE' },
-  { value: 'EXERCISED', label: 'EXERCISED' },
-  { value: 'EXPIRED', label: 'EXPIRED' },
+  { value: 'ACTIVE', label: STATUS_LABELS.ACTIVE },
+  { value: 'EXERCISED', label: STATUS_LABELS.EXERCISED },
+  { value: 'EXPIRED', label: STATUS_LABELS.EXPIRED },
 ];
 
 const statusBadgeVariant = (status: string): 'success' | 'secondary' | 'destructive' | 'warning' => {
@@ -113,10 +118,10 @@ export default function OtcContractsPage() {
         gradientFrom="from-amber-500"
         gradientTo="to-orange-600"
         kpis={source === 'inter' ? undefined : [
-          { label: 'ACTIVE', value: String(activeCount), tone: activeCount > 0 ? 'success' : 'default' },
+          { label: STATUS_LABELS.ACTIVE, value: String(activeCount), tone: activeCount > 0 ? 'success' : 'default' },
           { label: 'ITM kao kupac', value: String(itmCount), tone: itmCount > 0 ? 'warning' : 'default' },
-          { label: 'EXERCISED', value: String(exercisedCount) },
-          { label: 'EXPIRED', value: String(expiredCount) },
+          { label: STATUS_LABELS.EXERCISED, value: String(exercisedCount) },
+          { label: STATUS_LABELS.EXPIRED, value: String(expiredCount) },
         ]}
       />
 

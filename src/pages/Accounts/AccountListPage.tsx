@@ -493,14 +493,15 @@ export default function AccountListPage() {
                         </span>
                       </div>
 
-                      {/* Balance */}
+                      {/* Balance — T4A-021 fix: jasniji label "Stanje sa rezervisanim" vs "Raspolozivo"
+                          umesto generic "Ukupno" koje nije ocigledno. */}
                       <div className="mb-4">
-                        <p className="text-2xl font-bold font-mono tabular-nums tracking-tight">
+                        <p className="text-2xl font-bold font-mono tabular-nums tracking-tight" title="Raspolozivo stanje (bez rezervisanih sredstava)">
                           {formatBalance(account.availableBalance, '')}
                           <span className="text-sm font-semibold text-muted-foreground ml-1">{sym}</span>
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Ukupno: {formatBalance(account.balance, account.currency)}
+                        <p className="text-xs text-muted-foreground mt-0.5" title="Ukupno stanje racuna ukljucujuci rezervisana sredstva">
+                          Stanje sa rezervisanim: {formatBalance(account.balance, account.currency)}
                         </p>
                       </div>
 

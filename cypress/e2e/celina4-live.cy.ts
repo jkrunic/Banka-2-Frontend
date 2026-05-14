@@ -163,10 +163,11 @@ describe('Live C4: Fondovi - Detalji', () => {
 
   it('L6: /funds/1 prikazuje zaglavlje i KPI sekciju', () => {
     cy.visit('/funds/1');
-    cy.get('h1').should('exist');
-    // KPI labels should exist even if data is empty/error
+    // Vite bundle ~2.5MB + 2x API call (get + performance) moze trajati duze od
+    // default 6s timeout-a na slow CI runner-ima — bumpujemo na 15s.
+    cy.get('h1', { timeout: 15000 }).should('exist');
     cy.visit('/funds');
-    cy.get('h1').contains('Investicioni fondovi').should('be.visible');
+    cy.get('h1', { timeout: 10000 }).contains('Investicioni fondovi').should('be.visible');
   });
 
   it('L7: /funds/1 redirectuje na /funds kad BE vrati gresku (BE still TODO)', () => {

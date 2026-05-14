@@ -1,17 +1,15 @@
 /**
- * Phase 5 voice INPUT — MediaRecorder hook (NIJE Web Speech API).
+ * Phase 5 voice INPUT — MediaRecorder hook za snimanje audio Blob-a.
  *
- * Korisnik prica → mic → MediaRecorder API snima audio → blob (WebM/Opus
- * sto je default Chrome/Edge codec, BE konvertuje u WAV ako treba) →
- * posalje multipart na BE → BE prosleduje Gemma 4 modelu (Ollama
- * multimodal images polje, issue ollama#15333) → Gemma transkribuje
- * NATIVE i odgovara u istom turn-u.
+ * Audio se salje kao multipart POST /assistant/chat-multipart → BE
+ * base64-encoduje i prosledjuje Gemma 4 modelu preko Ollama-ovog
+ * {@code images} polja (issue ollama#15333 cilja audio podrsku).
  *
  * NEMA browser-side STT, NEMA Whisper sidecar — sve ide kroz nas lokalni
  * Gemma 4 model. Razlog: ujednacen pristup, jedan model za sve.
  *
- * Bez podrske Web Speech API-ja, ova komponenta vraca {isSupported: false}
- * i UI sakrije mic dugme.
+ * Bez podrske za MediaRecorder API (Firefox bez user permisije, vrlo stari
+ * browseri), komponenta vraca {isSupported: false} i UI sakrije mic dugme.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -23,14 +21,6 @@ export interface SpeechRecognitionState {
   isListening: boolean;
   /** Greska (mikrofon permission denied, ne moze record, ...). */
   error: string | null;
-  /**
-   * Real-time interim transcript za UI feedback dok korisnik prica.
-   * Koristi browser webkitSpeechRecognition (Chrome/Edge/Brave) za sirov SR text.
-   * BE Gemma 4 ASR ostaje GLAVNI — ovaj transcript je SAMO vizuelni feedback i
-   * resetuje se kad korisnik stop-uje. Prazan string ako browser ne podrzava
-   * SpeechRecognition (npr. Firefox/Safari) ili je tek startovano.
-   */
-  liveTranscript: string;
   /** Pokrene snimanje. */
   start: () => void;
   /**
@@ -43,30 +33,6 @@ export interface SpeechRecognitionState {
   reset: () => void;
 }
 
-// Web Speech API type augmentation (TS lib.dom nema definicije).
-interface WebSpeechRecognitionResult {
-  isFinal: boolean;
-  0: { transcript: string };
-}
-interface WebSpeechRecognitionEvent {
-  resultIndex: number;
-  results: ArrayLike<WebSpeechRecognitionResult> & { length: number };
-}
-interface WebSpeechRecognition extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: WebSpeechRecognitionEvent) => void) | null;
-  onerror: ((event: Event) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-}
-interface WindowWithSpeech extends Window {
-  webkitSpeechRecognition?: { new (): WebSpeechRecognition };
-  SpeechRecognition?: { new (): WebSpeechRecognition };
-}
-
 /**
  * MediaRecorder hook za audio snimanje (Phase 5 voice INPUT).
  *
@@ -74,14 +40,7 @@ interface WindowWithSpeech extends Window {
  *                     Idealan trenutak za posalji-na-BE flow.
  */
 export function useSpeechRecognition(
-  /**
-   * Callback se zove kad korisnik zaustavi snimanje. Prima:
-   * - `blob`: snimljen audio (WebM/Opus) za BE Gemma 4 ASR ako Ollama
-   *   eventualno doda audio podrsku (issue #15333 jos otvoren u 0.23.2)
-   * - `transcript`: browser webkitSpeechRecognition rezultat (cleaned text)
-   *   — koristi ovo kao primary fallback dok Ollama ne podrzi audio
-   */
-  onAudioReady?: (blob: Blob, transcript: string) => void
+  onAudioReady?: (blob: Blob) => void
 ): SpeechRecognitionState {
   const isSupported =
     typeof navigator !== 'undefined' &&
@@ -92,61 +51,10 @@ export function useSpeechRecognition(
 
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [liveTranscript, setLiveTranscript] = useState('');
-  // Ref koji prati liveTranscript za pristup iz callback-ova bez stale closure
-  const liveTranscriptRef = useRef('');
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const stopResolverRef = useRef<((blob: Blob | null) => void) | null>(null);
-  const speechRecRef = useRef<WebSpeechRecognition | null>(null);
-
-  // Helper za browser-side real-time SR (Chrome/Edge/Brave webkitSpeechRecognition)
-  // Pokrenuti paralelno sa MediaRecorder-om radi UI feedback-a. BE Gemma 4 ASR
-  // ostaje glavni — ovaj rezultat se NE salje, samo prikazuje korisniku.
-  const startBrowserSr = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const w = window as WindowWithSpeech;
-    const Ctor = w.webkitSpeechRecognition ?? w.SpeechRecognition;
-    if (!Ctor) return; // Firefox/Safari — nema browser SR, samo MediaRecorder
-    try {
-      const rec = new Ctor();
-      rec.lang = 'sr-Latn-RS'; // srpski latinica; fallback na 'sr-RS' ako browser ne podrzava
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.onresult = (event) => {
-        let interim = '';
-        let finalText = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) finalText += result[0].transcript;
-          else interim += result[0].transcript;
-        }
-        setLiveTranscript((prev) => {
-          const next = (finalText ? prev + finalText + ' ' : prev) + interim;
-          liveTranscriptRef.current = next;
-          return next;
-        });
-      };
-      rec.onerror = () => {
-        // Tih fail — browser SR je samo UI feedback, ne kritican
-      };
-      rec.onend = () => {
-        speechRecRef.current = null;
-      };
-      rec.start();
-      speechRecRef.current = rec;
-    } catch {
-      // Initialization failed (CSP, permission, ...) — tih fail
-    }
-  }, []);
-
-  const stopBrowserSr = useCallback(() => {
-    if (speechRecRef.current) {
-      try { speechRecRef.current.stop(); } catch { /* noop */ }
-      speechRecRef.current = null;
-    }
-  }, []);
 
   const cleanup = useCallback(() => {
     if (streamRef.current) {
@@ -227,19 +135,12 @@ export function useSpeechRecognition(
           stopResolverRef.current = null;
         }
         if (blob.size > 0 && onAudioReady) {
-          // Prosledi i blob (raw audio) i transcript (browser SR rezultat).
-          // Caller odlucuje da li ce poslati kao tekst (preporuceno dok Ollama
-          // nema audio multimodal) ili kao audio blob.
-          onAudioReady(blob, liveTranscriptRef.current.trim());
+          onAudioReady(blob);
         }
       };
 
       recorder.start(250); // chunk every 250ms
       setIsListening(true);
-      // Paralelno start-uj browser SR za real-time UI feedback (best effort)
-      setLiveTranscript('');
-      liveTranscriptRef.current = '';
-      startBrowserSr();
     } catch (e) {
       const err = e as { name?: string; message?: string };
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -251,12 +152,10 @@ export function useSpeechRecognition(
       }
       cleanup();
       setIsListening(false);
-      stopBrowserSr();
     }
-  }, [isSupported, cleanup, onAudioReady, startBrowserSr, stopBrowserSr]);
+  }, [isSupported, cleanup, onAudioReady]);
 
   const stop = useCallback((): Promise<Blob | null> => {
-    stopBrowserSr();
     return new Promise((resolve) => {
       if (!recorderRef.current || recorderRef.current.state === 'inactive') {
         resolve(null);
@@ -272,19 +171,16 @@ export function useSpeechRecognition(
         resolve(null);
       }
     });
-  }, [cleanup, stopBrowserSr]);
+  }, [cleanup]);
 
   const reset = useCallback(() => {
     cleanup();
-    stopBrowserSr();
     setIsListening(false);
     setError(null);
-    setLiveTranscript('');
-    liveTranscriptRef.current = '';
-  }, [cleanup, stopBrowserSr]);
+  }, [cleanup]);
 
   // Cleanup pri unmount-u
   useEffect(() => cleanup, [cleanup]);
 
-  return { isSupported, isListening, error, liveTranscript, start, stop, reset };
+  return { isSupported, isListening, error, start, stop, reset };
 }

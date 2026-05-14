@@ -26,28 +26,12 @@ export function ArbitroComposer() {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
-  // Phase 5 voice INPUT — hibridan pristup:
-  //  1. MediaRecorder snima audio Blob (za fallback ako Ollama eventualno
-  //     doda audio multimodal — issue #15333 i dalje otvoren u 0.23.2)
-  //  2. Browser webkitSpeechRecognition daje real-time transcript
-  //
-  // PRIMARNI flow: posalji transcript kao TEXT (send()) — pouzdano, Ollama
-  // chat endpoint radi bez problema. Ako transcript fali (Firefox/Safari
-  // bez webkitSR), fallback na sendWithMedia(blob) — model ce verovatno
-  // odgovoriti "ne vidim audio fajl" ali bar pokusava.
-  const speech = useSpeechRecognition((blob, transcript) => {
-    if (isStreaming) return;
-    const accompanyingText = text.trim();
-    if (transcript) {
-      // Imamo browser SR text — kombinuj sa typed text-om (ako postoji) i posalji
-      const combined = accompanyingText
-        ? `${accompanyingText} ${transcript}`
-        : transcript;
-      send(combined);
-    } else if (blob) {
-      // Fallback: nema transcript-a (Firefox/Safari) — posalji audio Blob
-      sendWithMedia(accompanyingText, blob);
-    }
+  // Phase 5 voice INPUT — MediaRecorder hook. Kad korisnik zaustavi snimanje,
+  // hook callback-uje sa Blob-om koji odmah saljemo na BE (Gemma 4 ASR).
+  const speech = useSpeechRecognition((blob) => {
+    if (!blob || isStreaming) return;
+    const accompanyingText = text.trim() || '';
+    sendWithMedia(accompanyingText, blob);
     setText('');
   });
 
@@ -92,7 +76,7 @@ export function ArbitroComposer() {
           rows={1}
           placeholder={
             speech.isListening
-              ? (speech.liveTranscript || 'Slusam… (klikni mic ponovo da posaljes)')
+              ? 'Slusam… (klikni mic ponovo da posaljes)'
               : 'Pitaj me o Banka 2 aplikaciji…'
           }
           className={`arbitro-textarea flex-1 ${speech.isListening ? 'arbitro-textarea-listening' : ''}`}
@@ -146,19 +130,6 @@ export function ArbitroComposer() {
       {speech.error && (
         <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400 px-2">
           {speech.error}
-        </div>
-      )}
-
-      {/* Real-time transcript dok korisnik prica — browser webkitSpeechRecognition
-          (best-effort, samo Chrome/Edge/Brave). Vizuelan feedback; BE Gemma 4 ASR
-          ostaje glavni izvor. Prikazujemo samo dok je mic aktivan + ima content-a. */}
-      {speech.isListening && speech.liveTranscript && (
-        <div
-          className="mt-2 text-xs px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 text-indigo-900 dark:text-indigo-100 italic"
-          data-testid="arbitro-live-transcript"
-        >
-          <span className="text-[10px] uppercase tracking-wider not-italic opacity-60 mr-1.5">live</span>
-          {speech.liveTranscript}
         </div>
       )}
     </div>

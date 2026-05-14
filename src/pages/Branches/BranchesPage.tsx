@@ -20,6 +20,10 @@ export default function BranchesPage() {
   const [hasDriveThrough, setHasDriveThrough] = useState(false);
   const [search, setSearch] = useState('');
   const [focusedBranchId, setFocusedBranchId] = useState<number | null>(null);
+  // Counter koji se inkrementira pri svakom Najblize-meni klik-u —
+  // koristi se kao useEffect dep u BranchMap da re-fire flyTo cak i kad
+  // korisnik klikne na istu najblizu lokaciju (bez promene focusedBranchId).
+  const [focusToken, setFocusToken] = useState(0);
 
   // Single fetch on mount — sva 72 redova (small payload, ne pravi smisla paginacija).
   useEffect(() => {
@@ -68,6 +72,8 @@ export default function BranchesPage() {
     }
     if (closest) {
       setFocusedBranchId(closest.id);
+      // Inkrementiraj token cak i ako je id isti — fix za "drugi klik me ne zumira"
+      setFocusToken((t) => t + 1);
       toast.info(`Najbliza lokacija: ${closest.name} (~${minDist.toFixed(1)} km)`);
     }
   };
@@ -143,7 +149,7 @@ export default function BranchesPage() {
           </div>
         </div>
       ) : (
-        <BranchMap branches={filteredBranches} focusedBranchId={focusedBranchId} />
+        <BranchMap branches={filteredBranches} focusedBranchId={focusedBranchId} focusToken={focusToken} />
       )}
 
       {/* Legend */}

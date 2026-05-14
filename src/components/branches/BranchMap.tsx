@@ -35,6 +35,12 @@ const DARK_TILE_ATTRIB = '&copy; <a href="https://www.openstreetmap.org/copyrigh
 interface BranchMapProps {
   branches: Branch[];
   focusedBranchId?: number | null;
+  /**
+   * Counter koji se inkrementira na svaki "Najblize meni" klik. Koristi se kao
+   * useEffect dep da forsira re-fire flyTo cak i kad focusedBranchId ostaje isti
+   * (drugi klik na istog locatemu).
+   */
+  focusToken?: number;
 }
 
 /**
@@ -44,7 +50,7 @@ interface BranchMapProps {
  * NOTE: Leaflet podrazumevani CSS importovan u top-level (leaflet/dist/leaflet.css).
  * MapContainer mora imati eksplicitnu visinu u parent containeru.
  */
-export function BranchMap({ branches, focusedBranchId }: BranchMapProps) {
+export function BranchMap({ branches, focusedBranchId, focusToken }: BranchMapProps) {
   const effectiveTheme = useEffectiveTheme();
   const isDark = effectiveTheme === 'dark';
 
@@ -75,7 +81,7 @@ export function BranchMap({ branches, focusedBranchId }: BranchMapProps) {
           attribution={isDark ? DARK_TILE_ATTRIB : LIGHT_TILE_ATTRIB}
         />
         <MapInvalidator />
-        <MapAutoCenter focusedBranchId={focusedBranchId} branches={branches} />
+        <MapAutoCenter focusedBranchId={focusedBranchId} focusToken={focusToken} branches={branches} />
         {branches.map((branch) => (
           <BranchMarker key={branch.id} branch={branch} highlighted={branch.id === focusedBranchId} />
         ))}
@@ -100,8 +106,13 @@ function MapInvalidator() {
   return null;
 }
 
-/** Re-centrira mapu kad se promeni focusedBranchId. Mora biti unutar MapContainer. */
-function MapAutoCenter({ focusedBranchId, branches }: { focusedBranchId?: number | null; branches: Branch[] }) {
+/**
+ * Re-centrira mapu na fokusiranu lokaciju. Listens na focusedBranchId I focusToken
+ * — counter osigurava da drugi klik na isti najblizu lokaciju ponovo trigger-uje
+ * flyTo (inace React vidi isti focusedBranchId i ne refire-uje useEffect).
+ */
+function MapAutoCenter({ focusedBranchId, focusToken, branches }:
+    { focusedBranchId?: number | null; focusToken?: number; branches: Branch[] }) {
   const map = useMap();
   useEffect(() => {
     if (focusedBranchId) {
@@ -110,7 +121,7 @@ function MapAutoCenter({ focusedBranchId, branches }: { focusedBranchId?: number
         map.flyTo([Number(branch.latitude), Number(branch.longitude)], 16, { duration: 1.2 });
       }
     }
-  }, [focusedBranchId, branches, map]);
+  }, [focusedBranchId, focusToken, branches, map]);
   return null;
 }
 

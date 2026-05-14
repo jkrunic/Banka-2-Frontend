@@ -174,7 +174,7 @@ export default function ClientSidebar() {
 
   const linkClassName = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+      'flex items-center gap-3 rounded-lg px-3 py-1 text-sm transition-all duration-200',
       isActive
         ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm border border-indigo-500/20'
         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'

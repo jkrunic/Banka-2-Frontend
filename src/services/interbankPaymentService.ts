@@ -36,6 +36,9 @@ type PaymentResponseDto = {
   errorMessage?: string;
   errorCode?: string;
   createdAt: string;
+  // Populated for interbank payments: the live InterbankTransactionStatus from the
+  // 2PC record. When present, takes precedence over the coarse PaymentStatus mapping.
+  sagaPhase?: string | null;
 };
 
 type PaymentListItemDto = {
@@ -103,7 +106,29 @@ export function pickFailureReason(
   return fallback;
 }
 
-function mapPaymentStatus(payment: { status: PaymentStatus; failureReason?: string; rejectionReason?: string; errorMessage?: string; errorCode?: string }): { status: InterbankPayment['status']; failureReason?: string } {
+// Direct mapping from backend InterbankTransactionStatus enum values to FE type.
+// Used when BE returns sagaPhase from a linked InterbankTransaction record.
+const SAGA_PHASE_MAP: Record<string, InterbankPayment['status']> = {
+  PREPARING:   'PREPARING',
+  PREPARED:    'PREPARED',
+  COMMITTED:   'COMMITTED',
+  ROLLED_BACK: 'ABORTED',
+  STUCK:       'STUCK',
+};
+
+function mapPaymentStatus(payment: { status: PaymentStatus; sagaPhase?: string | null; failureReason?: string; rejectionReason?: string; errorMessage?: string; errorCode?: string }): { status: InterbankPayment['status']; failureReason?: string } {
+  // Prefer live SAGA phase from InterbankTransaction over coarse PaymentStatus
+  if (payment.sagaPhase) {
+    const mapped = SAGA_PHASE_MAP[payment.sagaPhase];
+    if (mapped) {
+      const isFailure = mapped === 'ABORTED' || mapped === 'STUCK';
+      return {
+        status: mapped,
+        failureReason: isFailure ? pickFailureReason(payment, 'Interbank transakcija nije uspela.') : undefined,
+      };
+    }
+  }
+
   switch (payment.status) {
     case 'PENDING':
       return { status: 'INITIATED' };

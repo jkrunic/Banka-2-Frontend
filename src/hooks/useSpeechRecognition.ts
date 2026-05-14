@@ -74,7 +74,14 @@ interface WindowWithSpeech extends Window {
  *                     Idealan trenutak za posalji-na-BE flow.
  */
 export function useSpeechRecognition(
-  onAudioReady?: (blob: Blob) => void
+  /**
+   * Callback se zove kad korisnik zaustavi snimanje. Prima:
+   * - `blob`: snimljen audio (WebM/Opus) za BE Gemma 4 ASR ako Ollama
+   *   eventualno doda audio podrsku (issue #15333 jos otvoren u 0.23.2)
+   * - `transcript`: browser webkitSpeechRecognition rezultat (cleaned text)
+   *   — koristi ovo kao primary fallback dok Ollama ne podrzi audio
+   */
+  onAudioReady?: (blob: Blob, transcript: string) => void
 ): SpeechRecognitionState {
   const isSupported =
     typeof navigator !== 'undefined' &&
@@ -86,6 +93,8 @@ export function useSpeechRecognition(
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
+  // Ref koji prati liveTranscript za pristup iz callback-ova bez stale closure
+  const liveTranscriptRef = useRef('');
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -113,7 +122,11 @@ export function useSpeechRecognition(
           if (result.isFinal) finalText += result[0].transcript;
           else interim += result[0].transcript;
         }
-        setLiveTranscript((prev) => (finalText ? prev + finalText + ' ' : prev) + interim);
+        setLiveTranscript((prev) => {
+          const next = (finalText ? prev + finalText + ' ' : prev) + interim;
+          liveTranscriptRef.current = next;
+          return next;
+        });
       };
       rec.onerror = () => {
         // Tih fail — browser SR je samo UI feedback, ne kritican
@@ -214,7 +227,10 @@ export function useSpeechRecognition(
           stopResolverRef.current = null;
         }
         if (blob.size > 0 && onAudioReady) {
-          onAudioReady(blob);
+          // Prosledi i blob (raw audio) i transcript (browser SR rezultat).
+          // Caller odlucuje da li ce poslati kao tekst (preporuceno dok Ollama
+          // nema audio multimodal) ili kao audio blob.
+          onAudioReady(blob, liveTranscriptRef.current.trim());
         }
       };
 
@@ -222,6 +238,7 @@ export function useSpeechRecognition(
       setIsListening(true);
       // Paralelno start-uj browser SR za real-time UI feedback (best effort)
       setLiveTranscript('');
+      liveTranscriptRef.current = '';
       startBrowserSr();
     } catch (e) {
       const err = e as { name?: string; message?: string };
@@ -263,6 +280,7 @@ export function useSpeechRecognition(
     setIsListening(false);
     setError(null);
     setLiveTranscript('');
+    liveTranscriptRef.current = '';
   }, [cleanup, stopBrowserSr]);
 
   // Cleanup pri unmount-u

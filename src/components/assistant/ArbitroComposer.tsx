@@ -26,14 +26,28 @@ export function ArbitroComposer() {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
-  // Phase 5 voice INPUT — MediaRecorder hook. Kad korisnik zaustavi snimanje,
-  // hook callback-uje sa Blob-om koji odmah saljemo na BE.
-  const speech = useSpeechRecognition((blob) => {
-    if (!blob || isStreaming) return;
-    // Ako korisnik je tip-kao tekst pre snimanja, pridruzi ga audio-u;
-    // inace BE-u salje placeholder "Korisnik je poslao audio".
-    const accompanyingText = text.trim() || '';
-    sendWithMedia(accompanyingText, blob);
+  // Phase 5 voice INPUT — hibridan pristup:
+  //  1. MediaRecorder snima audio Blob (za fallback ako Ollama eventualno
+  //     doda audio multimodal — issue #15333 i dalje otvoren u 0.23.2)
+  //  2. Browser webkitSpeechRecognition daje real-time transcript
+  //
+  // PRIMARNI flow: posalji transcript kao TEXT (send()) — pouzdano, Ollama
+  // chat endpoint radi bez problema. Ako transcript fali (Firefox/Safari
+  // bez webkitSR), fallback na sendWithMedia(blob) — model ce verovatno
+  // odgovoriti "ne vidim audio fajl" ali bar pokusava.
+  const speech = useSpeechRecognition((blob, transcript) => {
+    if (isStreaming) return;
+    const accompanyingText = text.trim();
+    if (transcript) {
+      // Imamo browser SR text — kombinuj sa typed text-om (ako postoji) i posalji
+      const combined = accompanyingText
+        ? `${accompanyingText} ${transcript}`
+        : transcript;
+      send(combined);
+    } else if (blob) {
+      // Fallback: nema transcript-a (Firefox/Safari) — posalji audio Blob
+      sendWithMedia(accompanyingText, blob);
+    }
     setText('');
   });
 

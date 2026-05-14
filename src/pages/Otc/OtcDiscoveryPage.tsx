@@ -30,8 +30,10 @@ export default function OtcDiscoveryPage() {
   const [listings, setListings] = useState<OtcListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [submittingListingId, setSubmittingListingId] = useState<number | null>(null);
-  const [openedListingId, setOpenedListingId] = useState<number | null>(null);
+  // Composite key (listingId:sellerId) — vise prodavaca moze imati istu hartiju
+  // pa cista `listingId` nije jedinstven po redu tabele. Bug fix 14.05.2026 vece-7.
+  const [submittingKey, setSubmittingKey] = useState<string | null>(null);
+  const [openedKey, setOpenedKey] = useState<string | null>(null);
   const [formState, setFormState] = useState<OfferFormState>({
     quantity: '1',
     pricePerStock: '',
@@ -65,8 +67,10 @@ export default function OtcDiscoveryPage() {
     );
   }, [search, listings]);
 
+  const rowKey = (listing: OtcListing) => `${listing.listingId}:${listing.sellerId}`;
+
   const openForListing = (listing: OtcListing) => {
-    setOpenedListingId(listing.listingId);
+    setOpenedKey(rowKey(listing));
     setFormState({
       quantity: String(Math.min(listing.availablePublicQuantity, 1)),
       pricePerStock: listing.currentPrice ? String(listing.currentPrice) : '',
@@ -78,7 +82,7 @@ export default function OtcDiscoveryPage() {
   const submitOffer = async (listing: OtcListing) => {
     // T4A-012 fix: spreciti race kad korisnik brzo klikne Posalji vise puta ili na
     // razlicitim formama. Ako je vec u toku jedna submisija, ignorisi sledeci klik.
-    if (submittingListingId !== null) {
+    if (submittingKey !== null) {
       toast.info('Sacekajte da se prethodna ponuda zavrsi...');
       return;
     }
@@ -99,16 +103,17 @@ export default function OtcDiscoveryPage() {
       premium,
       settlementDate: formState.settlementDate,
     };
-    setSubmittingListingId(listing.listingId);
+    const key = rowKey(listing);
+    setSubmittingKey(key);
     try {
       await otcService.createOffer(payload);
       toast.success('Ponuda poslata prodavcu. Pratite je u "Moji pregovori" - sad ceka da prodavac odgovori.');
-      setOpenedListingId(null);
+      setOpenedKey(null);
       navigate('/otc/pregovori');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Neuspesno kreiranje ponude.'));
     } finally {
-      setSubmittingListingId(null);
+      setSubmittingKey(null);
     }
   };
 
@@ -183,115 +188,119 @@ export default function OtcDiscoveryPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((listing) => (
-                      <Fragment key={listing.portfolioId}>
-                        <TableRow>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-semibold">{listing.listingTicker}</span>
-                              <span className="text-xs text-muted-foreground">{listing.listingName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono">
-                            {formatAmount(listing.currentPrice)} {listing.listingCurrency}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono">
-                              {listing.availablePublicQuantity} / {listing.publicQuantity}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm">{listing.sellerName}</span>
-                              <span className="text-xs text-muted-foreground">{listing.sellerRole}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant={openedListingId === listing.listingId ? 'secondary' : 'default'}
-                              // T4A-012: disable sve trigger button-e dok je u toku jedna submisija
-                              disabled={submittingListingId !== null && submittingListingId !== listing.listingId}
-                              onClick={() =>
-                                openedListingId === listing.listingId
-                                  ? setOpenedListingId(null)
-                                  : openForListing(listing)
-                              }
-                              className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
-                            >
-                              <TrendingUp className="mr-2 h-4 w-4" />
-                              {openedListingId === listing.listingId ? 'Zatvori' : 'Napravi ponudu'}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                        {openedListingId === listing.listingId && (
-                          <TableRow className="bg-muted/20">
-                            <TableCell colSpan={5}>
-                              <div className="grid grid-cols-1 gap-3 p-2 md:grid-cols-4">
-                                <div className="space-y-1">
-                                  <Label htmlFor={`qty-${listing.listingId}`}>Kolicina akcija</Label>
-                                  <Input
-                                    id={`qty-${listing.listingId}`}
-                                    type="number"
-                                    min={1}
-                                    max={listing.availablePublicQuantity}
-                                    value={formState.quantity}
-                                    onChange={(e) => setFormState((s) => ({ ...s, quantity: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label htmlFor={`price-${listing.listingId}`}>
-                                    Cena po akciji ({listing.listingCurrency})
-                                  </Label>
-                                  <Input
-                                    id={`price-${listing.listingId}`}
-                                    type="number"
-                                    step="0.01"
-                                    value={formState.pricePerStock}
-                                    onChange={(e) => setFormState((s) => ({ ...s, pricePerStock: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label htmlFor={`premium-${listing.listingId}`}>
-                                    Premija ({listing.listingCurrency})
-                                  </Label>
-                                  <Input
-                                    id={`premium-${listing.listingId}`}
-                                    type="number"
-                                    step="0.01"
-                                    value={formState.premium}
-                                    onChange={(e) => setFormState((s) => ({ ...s, premium: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label htmlFor={`date-${listing.listingId}`}>Datum dospeca</Label>
-                                  <Input
-                                    id={`date-${listing.listingId}`}
-                                    type="date"
-                                    min={addDaysISO(1)}
-                                    value={formState.settlementDate}
-                                    onChange={(e) => setFormState((s) => ({ ...s, settlementDate: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="flex justify-end gap-2 md:col-span-4">
-                                  <Button variant="ghost" size="sm" onClick={() => setOpenedListingId(null)}>
-                                    Odustani
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    disabled={submittingListingId === listing.listingId}
-                                    onClick={() => void submitOffer(listing)}
-                                    className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
-                                  >
-                                    {submittingListingId === listing.listingId ? 'Slanje...' : 'Posalji ponudu prodavcu'}
-                                  </Button>
-                                </div>
+                    {filtered.map((listing) => {
+                      const key = rowKey(listing);
+                      const isOpen = openedKey === key;
+                      const isSubmitting = submittingKey === key;
+                      const anySubmittingOther = submittingKey !== null && submittingKey !== key;
+                      return (
+                        <Fragment key={key}>
+                          <TableRow>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-semibold">{listing.listingTicker}</span>
+                                <span className="text-xs text-muted-foreground">{listing.listingName}</span>
                               </div>
                             </TableCell>
+                            <TableCell className="font-mono">
+                              {formatAmount(listing.currentPrice)} {listing.listingCurrency}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="font-mono">
+                                {listing.availablePublicQuantity} / {listing.publicQuantity}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="text-sm">{listing.sellerName}</span>
+                                <span className="text-xs text-muted-foreground">{listing.sellerRole}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant={isOpen ? 'secondary' : 'default'}
+                                // T4A-012: disable sve trigger button-e dok je u toku jedna submisija
+                                disabled={anySubmittingOther}
+                                onClick={() =>
+                                  isOpen ? setOpenedKey(null) : openForListing(listing)
+                                }
+                                className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
+                              >
+                                <TrendingUp className="mr-2 h-4 w-4" />
+                                {isOpen ? 'Zatvori' : 'Napravi ponudu'}
+                              </Button>
+                            </TableCell>
                           </TableRow>
-                        )}
-                      </Fragment>
-                    ))}
+                          {isOpen && (
+                            <TableRow className="bg-muted/20">
+                              <TableCell colSpan={5}>
+                                <div className="grid grid-cols-1 gap-3 p-2 md:grid-cols-4">
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`qty-${key}`}>Kolicina akcija</Label>
+                                    <Input
+                                      id={`qty-${key}`}
+                                      type="number"
+                                      min={1}
+                                      max={listing.availablePublicQuantity}
+                                      value={formState.quantity}
+                                      onChange={(e) => setFormState((s) => ({ ...s, quantity: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`price-${key}`}>
+                                      Cena po akciji ({listing.listingCurrency})
+                                    </Label>
+                                    <Input
+                                      id={`price-${key}`}
+                                      type="number"
+                                      step="0.01"
+                                      value={formState.pricePerStock}
+                                      onChange={(e) => setFormState((s) => ({ ...s, pricePerStock: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`premium-${key}`}>
+                                      Premija ({listing.listingCurrency})
+                                    </Label>
+                                    <Input
+                                      id={`premium-${key}`}
+                                      type="number"
+                                      step="0.01"
+                                      value={formState.premium}
+                                      onChange={(e) => setFormState((s) => ({ ...s, premium: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`date-${key}`}>Datum dospeca</Label>
+                                    <Input
+                                      id={`date-${key}`}
+                                      type="date"
+                                      min={addDaysISO(1)}
+                                      value={formState.settlementDate}
+                                      onChange={(e) => setFormState((s) => ({ ...s, settlementDate: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="flex justify-end gap-2 md:col-span-4">
+                                    <Button variant="ghost" size="sm" onClick={() => setOpenedKey(null)}>
+                                      Odustani
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={isSubmitting}
+                                      onClick={() => void submitOffer(listing)}
+                                      className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
+                                    >
+                                      {isSubmitting ? 'Slanje...' : 'Posalji ponudu prodavcu'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

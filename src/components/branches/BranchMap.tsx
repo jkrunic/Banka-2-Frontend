@@ -58,7 +58,10 @@ export function BranchMap({ branches, focusedBranchId }: BranchMapProps) {
   }, [branches, focusedBranchId]);
 
   return (
-    <div className="h-[calc(100vh-280px)] min-h-[480px] w-full rounded-2xl overflow-hidden border shadow-lg">
+    <div
+      className="w-full rounded-2xl overflow-hidden border shadow-lg"
+      style={{ height: 'min(72vh, 720px)', minHeight: 520 }}
+    >
       <MapContainer
         center={initialCenter}
         zoom={DEFAULT_ZOOM}
@@ -71,6 +74,7 @@ export function BranchMap({ branches, focusedBranchId }: BranchMapProps) {
           url={isDark ? DARK_TILE_URL : LIGHT_TILE_URL}
           attribution={isDark ? DARK_TILE_ATTRIB : LIGHT_TILE_ATTRIB}
         />
+        <MapInvalidator />
         <MapAutoCenter focusedBranchId={focusedBranchId} branches={branches} />
         {branches.map((branch) => (
           <BranchMarker key={branch.id} branch={branch} highlighted={branch.id === focusedBranchId} />
@@ -78,6 +82,22 @@ export function BranchMap({ branches, focusedBranchId }: BranchMapProps) {
       </MapContainer>
     </div>
   );
+}
+
+/**
+ * Pokrene `map.invalidateSize()` posle mount-a kako bi se Leaflet
+ * pravilno isporucio tile-ovima i markerima cak i kad je parent
+ * pretrpio layout flip (npr. loading skeleton → map prelaz).
+ */
+function MapInvalidator() {
+  const map = useMap();
+  useEffect(() => {
+    // 2 retry pokusaja sa razmakom — pokriva animacioni flicker
+    const t1 = setTimeout(() => map.invalidateSize(), 100);
+    const t2 = setTimeout(() => map.invalidateSize(), 400);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [map]);
+  return null;
 }
 
 /** Re-centrira mapu kad se promeni focusedBranchId. Mora biti unutar MapContainer. */

@@ -80,6 +80,15 @@ const otcService = {
     });
     return data;
   },
+
+  /**
+   * Odustajanje od aktivnog ugovora — kupac potvrduje da ne zeli iskoristiti opciju.
+   * Premija OSTAJE kod prodavca (vec je placena pri accept-u). Status → EXPIRED.
+   */
+  abandonContract: async (contractId: number): Promise<OtcContract> => {
+    const { data } = await api.post<OtcContract>(`/otc/contracts/${contractId}/abandon`);
+    return data;
+  },
 };
 
 export default otcService;

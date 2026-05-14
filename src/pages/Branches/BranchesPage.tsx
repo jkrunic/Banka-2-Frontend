@@ -109,14 +109,14 @@ export default function BranchesPage() {
 
       {/* Map */}
       {loading ? (
-        <div className="h-[calc(100vh-280px)] min-h-[480px] flex items-center justify-center rounded-2xl border bg-muted/30">
+        <div className="w-full flex items-center justify-center rounded-2xl border bg-muted/30" style={{ height: 'min(72vh, 720px)', minHeight: 520 }}>
           <div className="text-center space-y-3">
             <div className="h-12 w-12 mx-auto rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 animate-pulse" />
             <p className="text-sm text-muted-foreground">Ucitavanje mape...</p>
           </div>
         </div>
       ) : filteredBranches.length === 0 ? (
-        <div className="h-[calc(100vh-280px)] min-h-[480px] flex items-center justify-center rounded-2xl border bg-muted/30">
+        <div className="w-full flex items-center justify-center rounded-2xl border bg-muted/30" style={{ height: 'min(72vh, 720px)', minHeight: 520 }}>
           <div className="text-center space-y-2">
             <MapPin className="h-10 w-10 mx-auto text-muted-foreground/50" />
             <p className="font-semibold">Nema lokacija</p>

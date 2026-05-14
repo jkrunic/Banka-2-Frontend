@@ -27,6 +27,7 @@ import {
   Vault,
   Percent,
   MapPin,
+  Gamepad2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/button';
@@ -243,6 +244,14 @@ export default function ClientSidebar() {
             >
               <Home className="h-4 w-4" />
               <span>Pocetna</span>
+            </NavLink>
+            <NavLink
+              to="/soba-za-cekanje"
+              className={linkClassName}
+              onClick={() => setOpen(false)}
+            >
+              <Gamepad2 className="h-4 w-4" />
+              <span>Soba za cekanje</span>
             </NavLink>
           </div>
 

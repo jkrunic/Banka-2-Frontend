@@ -110,6 +110,34 @@ export default function OtcContractsPage() {
     }
   };
 
+  /**
+   * Odustajanje od opcije — kupac priznaje da nece iskoristiti ugovor.
+   * Premija je vec placena pri accept-u i NE VRACA SE (to je cena opcije po spec-u
+   * Celina 4 — kupljeno je PRAVO ne obaveza). Ugovor → EXPIRED, prodavcev
+   * publicQuantity se automatski oslobadja.
+   */
+  const handleAbandon = async (contract: OtcContract) => {
+    const premiumLabel = `${contract.premium ?? 0} ${contract.listingCurrency}`;
+    if (
+      !window.confirm(
+        `Odustani od ugovora za ${contract.quantity} x ${contract.listingTicker}?\n\n` +
+        `VAZNO: premija koju ste platili prodavcu (${premiumLabel}) se NE VRACA — ` +
+        `to je cena opcionog ugovora. Nazad dobijate samo slobodu da ne kupite akcije.`,
+      )
+    ) return;
+    setBusyContractId(contract.id);
+    try {
+      await otcService.abandonContract(contract.id);
+      toast.success('Odustali ste od ugovora. Premija ostaje kod prodavca.');
+      const data = await otcService.listMyContracts(statusFilter);
+      setContracts(data ?? []);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Odustajanje nije uspelo.'));
+    } finally {
+      setBusyContractId(null);
+    }
+  };
+
   const activeCount = contracts.filter((c) => c.status === 'ACTIVE').length;
   const exercisedCount = contracts.filter((c) => c.status === 'EXERCISED').length;
   const expiredCount = contracts.filter((c) => c.status === 'EXPIRED').length;
@@ -161,6 +189,12 @@ export default function OtcContractsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Moji ugovori (intra-bank)</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              <strong>Kako rade opcioni ugovori:</strong> kad prihvati pregovor, kupac <em>placa premiju</em>{' '}
+              prodavcu odmah — to je cena <strong>prava da kupi</strong>. Klikom na <strong>Iskoristi</strong>{' '}
+              kupac placa strike × kolicina i dobija akcije. Ako <strong>odustane</strong> ili pusti settlement
+              da prodje, premija ostaje kod prodavca (vec je placena) — to je standardna option mehanika.
+            </p>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -235,15 +269,27 @@ export default function OtcContractsPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {c.status === 'ACTIVE' && isMe(c.buyerId, c.buyerName) ? (
-                              <Button
-                                size="sm"
-                                disabled={busyContractId === c.id}
-                                onClick={() => handleExercise(c)}
-                                className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
-                              >
-                                <Zap className="h-3.5 w-3.5 mr-1" />
-                                {busyContractId === c.id ? 'Izvrsavanje...' : 'Iskoristi'}
-                              </Button>
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  disabled={busyContractId === c.id}
+                                  onClick={() => handleExercise(c)}
+                                  className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
+                                >
+                                  <Zap className="h-3.5 w-3.5 mr-1" />
+                                  {busyContractId === c.id ? '...' : 'Iskoristi'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busyContractId === c.id}
+                                  onClick={() => handleAbandon(c)}
+                                  title="Premija se NE vraca. Samo zatvara ugovor pre settlementa."
+                                  data-testid={`otc-abandon-${c.id}`}
+                                >
+                                  Odustani
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}

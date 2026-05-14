@@ -64,6 +64,11 @@ import FundsDiscoveryPage from './pages/Funds/FundsDiscoveryPage';
 import FundDetailsPage from './pages/Funds/FundDetailsPage';
 import CreateFundPage from './pages/Funds/CreateFundPage';
 import BranchesPage from './pages/Branches/BranchesPage';
+import WaitingRoomHubPage from './pages/WaitingRoom/WaitingRoomHubPage';
+import DinoGamePage from './pages/WaitingRoom/DinoGamePage';
+import SolitaireGamePage from './pages/WaitingRoom/SolitaireGamePage';
+import ChessGamePage from './pages/WaitingRoom/ChessGamePage';
+import Banka2RushGamePage from './pages/WaitingRoom/Banka2RushGamePage';
 import ProfitBankPage from './pages/ProfitBank/ProfitBankPage';
 
 // Stedna knjizica
@@ -173,6 +178,13 @@ export default function App() {
 
           {/* Mapa lokacija (ekspoziture + bankomati) — svi role-ovi */}
           <Route path="/branches" element={<BranchesPage />} />
+
+          {/* Soba za cekanje — svi role-ovi */}
+          <Route path="/soba-za-cekanje" element={<WaitingRoomHubPage />} />
+          <Route path="/soba-za-cekanje/dino" element={<DinoGamePage />} />
+          <Route path="/soba-za-cekanje/solitaire" element={<SolitaireGamePage />} />
+          <Route path="/soba-za-cekanje/sah" element={<ChessGamePage />} />
+          <Route path="/soba-za-cekanje/banka-rush" element={<Banka2RushGamePage />} />
 
           {/* Stedna knjizica — klijent rute (noAgentOnly) */}
           <Route element={<ProtectedRoute noAgentOnly />}>

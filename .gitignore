@@ -25,3 +25,6 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Auto-copied iz node_modules/stockfish prebuild script-om — vidi scripts/copy-stockfish.cjs
+public/stockfish/

@@ -38,10 +38,10 @@ describe('NotFoundPage', () => {
     expect(screen.getByText(/Stranica koju pokušavate da otvorite ne postoji/)).toBeInTheDocument();
   });
 
-  it('renders help suggestions', () => {
+  it('embeds Bankar Dino game with hint to keyboard controls', () => {
     renderPage();
-    expect(screen.getByText(/Proverite da li ste ispravno uneli adresu/)).toBeInTheDocument();
-    expect(screen.getByText(/Možda je stranica premeštena ili obrisana/)).toBeInTheDocument();
+    expect(screen.getByText(/U medjuvremenu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Space/i)).toBeInTheDocument();
   });
 
   it('navigates to home on home button click', async () => {
@@ -52,6 +52,16 @@ describe('NotFoundPage', () => {
     await user.click(btn);
 
     expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('navigates to soba-za-cekanje on game button click', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const btn = screen.getByRole('button', { name: /Soba za čekanje/i });
+    await user.click(btn);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/soba-za-cekanje');
   });
 
   it('navigates to login on login button click', async () => {

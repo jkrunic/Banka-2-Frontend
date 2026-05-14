@@ -362,7 +362,8 @@ describe('Live: Kartice', () => {
   it('Nova kartica forma postoji', () => {
     cy.visit('/cards');
     cy.wait(1500);
-    cy.contains(/nova kartica|zatraži/i).should('exist');
+    // CardListPage 14.05 vece-1 runa: top CTA "Zatrazi novu karticu", empty state "Zatrazite karticu".
+    cy.contains(/nova kartica|Zatrazi novu karticu|Zatrazite karticu|zatraži/i).should('exist');
   });
 });
 
@@ -1050,11 +1051,10 @@ describe('Live: Employee Portali - Detalji', () => {
   it('Kreiranje racuna - poslovni prikazuje polja za firmu', () => {
     cy.visit('/employee/accounts/new');
     cy.wait(2000);
-    // Open the account type select (shadcn Select, default is "Tekuci")
-    cy.contains(/Tekuci|Tekući/i).first().click({ force: true });
-    cy.wait(1000);
-    // Select "Poslovni" from dropdown options
-    cy.get('[role="option"]').contains(/Poslovni/i).click();
+    // CreateAccountPage 12.05 razdvojen: Tip vlasnistva (LICNI/POSLOVNI) + Tip racuna (TEKUCI/DEVIZNI).
+    // Klijemo na ownership trigger (prvi select) i biramo POSLOVNI.
+    cy.get('[data-testid="account-ownership-trigger"]').click();
+    cy.get('[data-testid="account-ownership-poslovni"]').click();
     cy.wait(2000);
     // Should show company-related fields
     cy.contains(/firma|kompanij|company|naziv firme|PIB|maticni/i, { timeout: 10000 }).should('exist');
@@ -1181,7 +1181,8 @@ describe('Stedna knjizica (live) — Celina 2 nadogradnja', () => {
   it('Sc S1 live: Klijent moze da otvori /savings i vidi seedovani depozit', () => {
     loginAsClient('stefan');
     cy.visit('/savings');
-    cy.contains(/Stednja/i, { timeout: 10000 }).should('be.visible');
+    // Sidebar je interno scrollabilan — "Stednja" link moze biti van vidnog opsega.
+    cy.contains(/Stednja/i, { timeout: 10000 }).scrollIntoView().should('be.visible');
     // Stefan ima 1 seedovani depozit (RSD 200K 12m)
     cy.contains(/200/, { timeout: 10000 }).should('be.visible');
   });
@@ -1189,13 +1190,15 @@ describe('Stedna knjizica (live) — Celina 2 nadogradnja', () => {
   it('Sc S2 live: Klijent vidi sidebar link Stednja', () => {
     loginAsClient('stefan');
     cy.visit('/');
-    cy.contains(/Stednja/i, { timeout: 10000 }).should('be.visible');
+    // Sidebar interno scrollabilan.
+    cy.contains(/Stednja/i, { timeout: 10000 }).scrollIntoView().should('be.visible');
   });
 
   it('Sc S3 live: Admin vidi /admin/savings/deposits stranicu', () => {
     loginAsAdmin();
     cy.visit('/admin/savings/deposits');
-    cy.contains(/(orocni )?depozit/i, { timeout: 10000 }).should('be.visible');
+    // Page content moze biti ispod fold-a; scrollIntoView pre visible assertion-a.
+    cy.contains(/(orocni )?depozit/i, { timeout: 10000 }).scrollIntoView().should('be.visible');
   });
 
   it('Sc S4 live: GET /api/savings/rates vraca seedovane stope', () => {

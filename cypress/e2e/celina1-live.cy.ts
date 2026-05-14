@@ -853,6 +853,18 @@ describe('Live: Reset Password validacija', () => {
 // ============================================================
 
 describe('Live: Aktivacija naloga validacija', () => {
+  // 12.05 vece-1 runa: ActivateAccountPage radi pre-check tokena pri mount-u kroz
+  // GET /auth-employee/activation-token/{token}/status koji vraca VALID/USED/EXPIRED/INVALID/ALREADY_ACTIVE.
+  // Token "test-token-123" BE markira INVALID — forma se NE renderuje, pa testovi za password validaciju
+  // ne mogu da pristupe input poljima. Mock-ujemo SAMO status endpoint da forma renderuje;
+  // ostatak (lozinka validacija) je pure FE i radi live.
+  beforeEach(() => {
+    cy.intercept('GET', '**/auth-employee/activation-token/*/status', {
+      statusCode: 200,
+      body: { status: 'VALID', email: 'test.aktivacija@banka.rs', expiresAt: '2027-01-01T00:00:00Z' },
+    }).as('tokenStatus');
+  });
+
   it('Poseta /activate-account bez tokena prikazuje gresku', () => {
     cy.visit('/activate-account');
     cy.contains(/Aktivacija|token|Nevažeći|link/i, { timeout: 10000 })
@@ -861,6 +873,7 @@ describe('Live: Aktivacija naloga validacija', () => {
 
   it('Lozinke se ne poklapaju - validacija', () => {
     cy.visit('/activate-account?token=test-token-123');
+    cy.wait('@tokenStatus');
     cy.wait(2000);
     cy.get('input[type="password"]').eq(0).clear().type('NovaLozinka123');
     cy.get('input[type="password"]').eq(1).clear().type('DrugaLozinka456');
@@ -872,6 +885,7 @@ describe('Live: Aktivacija naloga validacija', () => {
 
   it('Slaba lozinka bez velikog slova', () => {
     cy.visit('/activate-account?token=test-token-123');
+    cy.wait('@tokenStatus');
     cy.wait(2000);
     cy.get('input[type="password"]').eq(0).clear().type('samomaloslova123');
     cy.get('input[type="password"]').eq(1).clear().type('samomaloslova123');
@@ -883,6 +897,7 @@ describe('Live: Aktivacija naloga validacija', () => {
 
   it('Password strength indikator se prikazuje', () => {
     cy.visit('/activate-account?token=test-token-123');
+    cy.wait('@tokenStatus');
     cy.wait(2000);
     cy.get('input[type="password"]').eq(0).clear().type('Test1234');
     cy.get('[class*="strength"], [class*="progress"], [class*="indicator"], [role="progressbar"]', { timeout: 5000 })

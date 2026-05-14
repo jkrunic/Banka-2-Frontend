@@ -384,8 +384,10 @@ describe('Employee Portal: Kreiranje racuna', () => {
 
   it('S4: Kreiranje poslovnog racuna sa firmom', () => {
     cy.visit('/employee/accounts/new', { onBeforeLoad: setupAdminSession });
-    cy.contains('Tekuci').first().click();
-    cy.get('[role="option"]').contains('Poslovni').click();
+    // CreateAccountPage 12.05 razdvojen: Tip vlasnistva (LICNI/POSLOVNI) + Tip racuna (TEKUCI/DEVIZNI).
+    // Klijemo na ownership trigger (prvi select) i biramo POSLOVNI da bi se pojavila firma sekcija.
+    cy.get('[data-testid="account-ownership-trigger"]').click();
+    cy.get('[data-testid="account-ownership-poslovni"]').click();
     cy.wait(500);
     // Business fields should appear
     cy.contains('Naziv firme').should('exist');
@@ -486,6 +488,10 @@ describe('Placanja > Novo placanje', () => {
     cy.get('textarea[name="paymentPurpose"]').type('Test');
 
     cy.contains('button', /Nastavi na verifikaciju|Kreiranje/i).click();
+    // 12.05 vece-1 runa: 2-step flow — confirm dialog pre OTP modala.
+    cy.wait(500);
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
     // OTP modal should appear
     cy.contains(/verifikacij|kod|otp/i, { timeout: 5000 }).should('exist');
   });
@@ -854,7 +860,10 @@ describe('Kartice', () => {
       statusCode: 201, body: { id: 99, status: 'PENDING' },
     });
     cy.visit('/cards', { onBeforeLoad: setupClientSession });
-    cy.contains(/Nova kartica|Zatrazite karticu/i).click();
+    // CardListPage ima dve forme dugmeta:
+    //   linija 486 (top) "Zatrazi novu karticu" + linija 741 (empty state) "Zatrazite karticu".
+    // Klijemo na prvi koji postoji (top dugme — sa cards postoji).
+    cy.contains(/Nova kartica|Zatrazi novu karticu|Zatrazite karticu/i).first().click();
   });
 
   it('S30: Blokiranje aktivne kartice', () => {
@@ -863,8 +872,10 @@ describe('Kartice', () => {
     }).as('blockCard');
 
     cy.visit('/cards', { onBeforeLoad: setupClientSession });
-    // Block via Switch toggle - active card has checked switch
+    // 14.05 vece-1 runa: blok ide preko Radix Dialog confirm-a, ne direktnog PATCH-a.
+    // Switch click otvara dialog [data-testid="card-block-confirm-dialog"]; PATCH ide tek na confirm dugme.
     cy.get('[role="switch"]').first().click({ force: true });
+    cy.get('[data-testid="card-block-confirm-button"]').click();
     cy.wait('@blockCard');
   });
 
@@ -1313,7 +1324,11 @@ describe('OTP Verifikacija', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju|Kreiranje/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: 2-step flow — prvo confirm dialog (payment-confirm-dialog), pa tek OTP modal.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     cy.get('input[name="code"], input[placeholder*="kod"], input[maxlength="6"]').should('exist');
   });
 
@@ -1325,7 +1340,11 @@ describe('OTP Verifikacija', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju|Kreiranje/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: confirm dialog pre OTP modala.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     cy.contains(/email|pošalji na email/i).should('exist');
   });
 
@@ -1443,7 +1462,8 @@ describe('Kompletni E2E Flowovi - Celina 2', () => {
 
   it('Card management flow: lista -> kreiranje', () => {
     cy.visit('/cards', { onBeforeLoad: setupClientSession });
-    cy.contains(/Nova kartica|Zatrazite karticu/i).should('exist');
+    // Top page CTA ima tekst "Zatrazi novu karticu"; empty state ima "Zatrazite karticu".
+    cy.contains(/Nova kartica|Zatrazi novu karticu|Zatrazite karticu/i).should('exist');
   });
 });
 
@@ -1546,7 +1566,9 @@ describe('Kartice - Dodatni testovi', () => {
   it('Block API greska prikazuje error', () => {
     cy.intercept('PATCH', '**/api/cards/101/block', { statusCode: 500, body: { message: 'Error' } });
     cy.visit('/cards', { onBeforeLoad: setupClientSession });
+    // 14.05 vece-1 runa: switch otvara confirm dialog; tek confirm okida PATCH koji vraca 500.
     cy.get('[role="switch"]').first().click({ force: true });
+    cy.get('[data-testid="card-block-confirm-button"]').click();
     // Should show error toast
   });
 
@@ -1570,7 +1592,11 @@ describe('OTP Verifikacija - Detaljni testovi', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: 2-step flow — confirm dialog pre OTP modala.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     cy.contains(/05:00|04:5|minut|vreme/i).should('exist');
   });
 
@@ -1582,7 +1608,11 @@ describe('OTP Verifikacija - Detaljni testovi', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: confirm dialog pre OTP modala.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     cy.contains(/pokusaj|pokušaj|preostal/i).should('exist');
   });
 
@@ -1595,7 +1625,11 @@ describe('OTP Verifikacija - Detaljni testovi', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: confirm dialog pre OTP modala.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     cy.get('input[name="code"], input[maxlength="6"]').type('999999');
     cy.contains('button', /potvrdi|verifikuj/i).click();
   });
@@ -1609,7 +1643,11 @@ describe('OTP Verifikacija - Detaljni testovi', () => {
     cy.get('input[name="amount"]').type('100');
     cy.get('textarea[name="paymentPurpose"]').type('Test');
     cy.contains('button', /Nastavi na verifikaciju/i).click();
-    cy.wait(1000);
+    cy.wait(500);
+    // 12.05 vece-1 runa: confirm dialog pre OTP modala.
+    cy.get('[data-testid="payment-confirm-dialog"]').should('be.visible');
+    cy.contains('button', /Potvrdi i nastavi/i).click();
+    cy.wait(500);
     // Close modal without entering code
     cy.get('body').type('{esc}');
   });
@@ -1635,6 +1673,10 @@ describe('OTP Verifikacija - Detaljni testovi', () => {
 
 describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
   beforeEach(() => {
+    // Treba klijentske default mock-ove za /home (Sc S4 i Sc S8) jer HomePage zove /accounts/my,
+    // /payment-recipients, /exchange-rates i /api/savings/deposits/my.
+    setupClientMocks();
+
     // Mock kamatne stope (klijentski endpoint)
     cy.intercept('GET', '**/api/savings/rates', {
       statusCode: 200,
@@ -1666,7 +1708,8 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
   it('Sc S1: Klijent vidi listu depozita', () => {
     cy.visit('/savings', { onBeforeLoad: setupClientSession });
     cy.wait('@myDeposits');
-    cy.contains(/Stednja/i).should('be.visible');
+    // Sidebar je interno scrollabilan — link "Stednja" moze biti van vidnog opsega.
+    cy.contains(/Stednja/i).scrollIntoView().should('be.visible');
     cy.get('[data-testid="deposit-card-1"]').should('be.visible');
   });
 
@@ -1689,7 +1732,8 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
 
   it('Sc S4: Sidebar prikazuje "Stednja" link za klijenta', () => {
     cy.visit('/', { onBeforeLoad: setupClientSession });
-    cy.contains(/Stednja/i).should('be.visible');
+    // Sidebar je interno scrollabilan — link moze biti u DOM-u ali van vidnog opsega.
+    cy.contains(/Stednja/i).scrollIntoView().should('be.visible');
   });
 
   it('Sc S5: Admin vidi stranicu svih depozita', () => {
@@ -1699,7 +1743,8 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
     }).as('adminDeposits');
     cy.visit('/admin/savings/deposits', { onBeforeLoad: setupAdminSession });
     cy.wait('@adminDeposits');
-    cy.contains(/(orocni )?depozit/i).should('be.visible');
+    // Page content (ne sidebar) — header "Orocni depoziti" se renderuje na sredini stranice.
+    cy.contains(/(orocni )?depozit/i).scrollIntoView().should('be.visible');
   });
 
   it('Sc S6: Admin moze da vidi stranicu kamatnih stopa', () => {
@@ -1712,7 +1757,7 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
     }).as('adminRates');
     cy.visit('/admin/savings/rates', { onBeforeLoad: setupAdminSession });
     cy.wait('@adminRates');
-    cy.contains(/Kamatne stope/i).should('be.visible');
+    cy.contains(/Kamatne stope/i).scrollIntoView().should('be.visible');
   });
 
   it('Sc S7: Klijent vidi detalje depozita sa timeline-om transakcija', () => {
@@ -1746,6 +1791,7 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
 
   it('Sc S8: HomePage prikazuje "Orocno" KPI chip za klijenta', () => {
     cy.visit('/', { onBeforeLoad: setupClientSession });
-    cy.contains(/Orocno/i).should('be.visible');
+    // Orocno je 5. KPI chip u hero sekciji — moze biti van vidnog opsega na manjim viewport-ima.
+    cy.contains(/Orocno/i).scrollIntoView().should('be.visible');
   });
 });

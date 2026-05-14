@@ -74,6 +74,16 @@ async function consumeSseStream(
   let buffer = '';
   let chatDone = false;
 
+  const parseAndEmit = (frame: string) => {
+    parseFrame(frame, (eventName, data) => {
+      const parsed = parseSseEvent(eventName, data);
+      if (parsed) {
+        if (parsed.type === 'done') chatDone = true;
+        onEvent(parsed);
+      }
+    });
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -84,18 +94,29 @@ async function consumeSseStream(
         if (frameEnd === -1) break;
         const frame = buffer.slice(0, frameEnd);
         buffer = buffer.slice(frameEnd + 2);
-        parseFrame(frame, (eventName, data) => {
-          const parsed = parseSseEvent(eventName, data);
-          if (parsed) {
-            if (parsed.type === 'done') chatDone = true;
-            onEvent(parsed);
-          }
-        });
+        parseAndEmit(frame);
       }
     }
   } catch (readErr) {
+    // Pre nego sto reportujemo gresku, pokusaj parsanje preostalog buffer-a —
+    // moze biti da je sidecar/BE poslao finalni `event:done` ali server-side
+    // chunked encoding terminator je izgubljen (ERR_INCOMPLETE_CHUNKED_ENCODING
+    // u browseru). Bez ovog, status bi ostao 'streaming' i UI bi pokazao
+    // plain text umesto markdown render-a.
+    if (buffer.trim().length > 0) {
+      parseAndEmit(buffer.trim());
+      buffer = '';
+    }
     if (!chatDone) throw readErr;
   }
+
+  // Normalan stream end: server ucinio TCP FIN, ali poslednji event je mozda
+  // bez trailing `\n\n` separator-a (Spring SseEmitter.complete() ne forsira
+  // separator pre close-a). Parsiramo bilo sta sto je ostalo u buffer-u.
+  if (buffer.trim().length > 0) {
+    parseAndEmit(buffer.trim());
+  }
+
   return { chatDone };
 }
 

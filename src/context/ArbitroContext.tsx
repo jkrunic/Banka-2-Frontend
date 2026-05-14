@@ -594,7 +594,10 @@ export function ArbitroProvider({ children }: { children: ReactNode }) {
               }
               setMessages((prev) => {
                 const finalMsg = prev.find((m) => m.key === assistantMsg.key);
-                if (ttsEnabled && finalMsg && finalMsg.content.trim().length > 0) {
+                // Voice-IN → voice-OUT: kad je korisnik govorio kroz mic, uvek
+                // procitaj odgovor kroz TTS (bez obzira na toggle). Korisnik je
+                // jasno indikovao da preferira audio modalitet.
+                if (finalMsg && finalMsg.content.trim().length > 0) {
                   void playTtsAsync(finalMsg.content, ttsVoice, ttsAudioRef);
                 }
                 return prev.map((m) =>

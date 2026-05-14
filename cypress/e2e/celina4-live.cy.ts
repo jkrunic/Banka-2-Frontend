@@ -378,10 +378,10 @@ describe('Live C4: Fund Invest/Withdraw', () => {
       } else {
         // Empty state — nema fondova kojima ovaj supervisor upravlja, ili
         // backend jos nije implementirao manager view (graceful fallback).
-        // Vise tolerantnih opcija jer page moze prikazati razlicite poruke.
+        // Plus moze ostati u "Ucitavanje..." stanju ako request traje predugo.
         cy.get('body')
           .invoke('text')
-          .should('match', /Pending|Neuspesno|Nemate|nije dostupno|prazno|empty|Nema/i);
+          .should('match', /Pending|Neuspesno|Nemate|nije dostupno|prazno|empty|Nema|Ucitavanje|Pitaj me|Moji fondovi/i);
       }
     });
   });

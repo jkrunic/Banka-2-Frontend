@@ -1731,8 +1731,8 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
   });
 
   it('Sc S4: Sidebar prikazuje "Stednja" link za klijenta', () => {
-    cy.visit('/', { onBeforeLoad: setupClientSession });
-    // Sidebar je interno scrollabilan — link moze biti u DOM-u ali van vidnog opsega.
+    // /home je protected route sa MainLayout + sidebar (a / je LandingPage bez sidebar-a).
+    cy.visit('/home', { onBeforeLoad: setupClientSession });
     cy.contains(/Stednja/i).scrollIntoView().should('be.visible');
   });
 
@@ -1790,8 +1790,8 @@ describe('Stedna knjizica (mock) — Celina 2 nadogradnja', () => {
   });
 
   it('Sc S8: HomePage prikazuje "Orocno" KPI chip za klijenta', () => {
-    cy.visit('/', { onBeforeLoad: setupClientSession });
-    // Orocno je 5. KPI chip u hero sekciji — moze biti van vidnog opsega na manjim viewport-ima.
+    // /home je HomePage (a / je LandingPage). Orocno chip ide u hero sekciji.
+    cy.visit('/home', { onBeforeLoad: setupClientSession });
     cy.contains(/Orocno/i).scrollIntoView().should('be.visible');
   });
 });

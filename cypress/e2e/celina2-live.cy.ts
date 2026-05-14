@@ -1189,8 +1189,8 @@ describe('Stedna knjizica (live) — Celina 2 nadogradnja', () => {
 
   it('Sc S2 live: Klijent vidi sidebar link Stednja', () => {
     loginAsClient('stefan');
-    cy.visit('/');
-    // Sidebar interno scrollabilan.
+    // /home je protected route sa MainLayout + sidebar (a / je LandingPage bez sidebar-a).
+    cy.visit('/home');
     cy.contains(/Stednja/i, { timeout: 10000 }).scrollIntoView().should('be.visible');
   });
 

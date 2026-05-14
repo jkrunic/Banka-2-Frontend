@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { CreditCard, Loader2, Plus, Wifi, Shield, Calendar, UserPlus } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
 
 
 import {
@@ -219,6 +220,10 @@ export default function CardListPage() {
   const [newApLastName, setNewApLastName] = useState('');
   const [newApEmail, setNewApEmail] = useState('');
   const [newApPhone, setNewApPhone] = useState('');
+  // SC28 fix: spec C2 §274-291 trazi vise tipova/brendova kartica.
+  // BE enum CardType: VISA, MASTERCARD, DINACARD, AMERICAN_EXPRESS (sve su Debit u nasem sistemu).
+  const [cardBrand, setCardBrand] = useState<'VISA' | 'MASTERCARD' | 'DINACARD' | 'AMERICAN_EXPRESS'>('VISA');
+  const [confirmBlockCardId, setConfirmBlockCardId] = useState<number | null>(null);
 
   const loadCards = async () => {
     setLoading(true);
@@ -291,9 +296,10 @@ export default function CardListPage() {
 
     setCreatingCard(true);
     try {
-      const requestData: { accountId: number; cardLimit?: number; authorizedPersonId?: number; authorizedPerson?: Partial<import('@/types/celina2').AuthorizedPerson> } = {
+      const requestData: { accountId: number; cardLimit?: number; cardType?: string; authorizedPersonId?: number; authorizedPerson?: Partial<import('@/types/celina2').AuthorizedPerson> } = {
         accountId: Number(selectedAccountId),
         cardLimit: Number(newCardLimit) || 100000,
+        cardType: cardBrand,
       };
 
       if (isBusiness && cardRecipient === 'authorized') {
@@ -329,11 +335,14 @@ export default function CardListPage() {
   };
 
   const runCardAction = async (cardId: number, action: 'block' | 'unblock' | 'deactivate' | 'limit') => {
+    // SC30 fix: blokada kartice je destruktivna akcija — trazimo confirm pre poziva.
+    if (action === 'block') {
+      setConfirmBlockCardId(cardId);
+      return;
+    }
     setProcessingCardId(cardId);
     try {
-      if (action === 'block') {
-        await cardService.block(cardId);
-      } else if (action === 'unblock') {
+      if (action === 'unblock') {
         await cardService.unblock(cardId);
       } else if (action === 'deactivate') {
         const confirmed = window.confirm('Da li ste sigurni da zelite deaktivaciju kartice?');
@@ -388,10 +397,11 @@ export default function CardListPage() {
         {!isAdmin && !showNewCard && (
           <Button
             onClick={() => setShowNewCard(true)}
+            data-testid="card-request-cta"
             className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 hover:scale-[1.02] transition-all duration-200"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Nova kartica
+            Zatrazi novu karticu
           </Button>
         )}
       </div>
@@ -455,6 +465,25 @@ export default function CardListPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Brend kartice *</Label>
+                <Select value={cardBrand} onValueChange={(val) => setCardBrand(val as 'VISA' | 'MASTERCARD' | 'DINACARD' | 'AMERICAN_EXPRESS')}>
+                  <SelectTrigger data-testid="card-brand-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VISA">Visa</SelectItem>
+                    <SelectItem value="MASTERCARD">Mastercard</SelectItem>
+                    <SelectItem value="DINACARD">DinaCard</SelectItem>
+                    <SelectItem value="AMERICAN_EXPRESS">American Express</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tip kartice</Label>
+                <Input value="Debit" readOnly aria-readonly className="bg-muted/40 cursor-not-allowed" />
+                <p className="text-[11px] text-muted-foreground">Trenutno podrzavamo samo Debit kartice.</p>
               </div>
               <div className="space-y-2">
                 <Label>Limit kartice (RSD)</Label>
@@ -712,6 +741,43 @@ export default function CardListPage() {
           ))}
         </div>
       )}
+
+      {/* SC30 fix: Radix confirm dialog za blokadu kartice */}
+      <Dialog.Root open={confirmBlockCardId !== null} onOpenChange={(open) => !open && setConfirmBlockCardId(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-6 shadow-2xl" data-testid="card-block-confirm-dialog">
+            <Dialog.Title className="text-lg font-semibold">Blokiraj karticu?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+              Posle blokade kartica vise nece moci da se koristi za placanja. Odblokirati moze samo zaposleni u banci.
+            </Dialog.Description>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmBlockCardId(null)}>Otkazi</Button>
+              <Button
+                variant="destructive"
+                data-testid="card-block-confirm-button"
+                onClick={async () => {
+                  if (confirmBlockCardId === null) return;
+                  const cardId = confirmBlockCardId;
+                  setConfirmBlockCardId(null);
+                  setProcessingCardId(cardId);
+                  try {
+                    await cardService.block(cardId);
+                    await loadCards();
+                    toast.success('Kartica je blokirana.');
+                  } catch {
+                    toast.error('Blokada kartice nije uspela.');
+                  } finally {
+                    setProcessingCardId(null);
+                  }
+                }}
+              >
+                Blokiraj
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Inline keyframes */}
       <style>{`

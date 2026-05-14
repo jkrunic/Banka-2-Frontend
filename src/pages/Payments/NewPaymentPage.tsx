@@ -582,7 +582,15 @@ export default function NewPaymentPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="amount" className="text-sm font-medium text-muted-foreground">Iznos</Label>
-                  <Input id="amount" className="h-11 rounded-xl font-mono tabular-nums" type="number" step="0.01" {...register('amount', { valueAsNumber: true })} />
+                  <Input
+                    id="amount"
+                    className="h-11 rounded-xl font-mono tabular-nums"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max="99999999.99"
+                    {...register('amount', { valueAsNumber: true })}
+                  />
                   {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                 </div>
                 <div className="space-y-2">

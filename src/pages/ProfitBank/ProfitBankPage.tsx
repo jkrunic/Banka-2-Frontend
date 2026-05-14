@@ -196,7 +196,14 @@ export default function ProfitBankPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-mono">{a.ordersDone}</TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell
+                          className={`text-right font-mono ${
+                            a.totalProfitRsd >= 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-red-600 dark:text-red-400'
+                          }`}
+                          data-testid={`actuary-profit-${a.employeeId}`}
+                        >
                           {formatAmount(a.totalProfitRsd)}
                         </TableCell>
                       </TableRow>

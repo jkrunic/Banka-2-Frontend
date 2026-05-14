@@ -134,11 +134,23 @@ export function getErrorMessage(error: unknown, fallback?: string): string {
     'response' in error
   ) {
     const response = (error as { response?: { data?: { error?: string; message?: string } } }).response;
-    if (response?.data?.error) {
-      return response.data.error;
+    // T2-010 fix: `response.data.message` ima konkretnu poruku iz BE-a
+    // (npr. "Racun primaoca ne postoji."), dok `response.data.error` cesto
+    // sadrzi samo Spring-ov generic status reason ("Bad Request"). Stoga
+    // `message` ima prioritet, a `error` se koristi samo ako message fali ili
+    // nije razlicit od generickih status reasona.
+    const message = response?.data?.message;
+    const errorField = response?.data?.error;
+    const GENERIC_SPRING_ERRORS = new Set([
+      'Bad Request', 'Unauthorized', 'Forbidden', 'Not Found',
+      'Conflict', 'Internal Server Error',
+    ]);
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
     }
-    if (response?.data?.message) {
-      return response.data.message;
+    if (typeof errorField === 'string' && errorField.trim().length > 0
+        && !GENERIC_SPRING_ERRORS.has(errorField)) {
+      return errorField;
     }
   }
 

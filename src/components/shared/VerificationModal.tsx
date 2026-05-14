@@ -236,11 +236,18 @@ export default function VerificationModal({ isOpen, onClose, onVerified }: Verif
                   {...register('code')}
                   id="otp"
                   inputMode="numeric"
+                  maxLength={6}
+                  pattern="\d{6}"
                   placeholder="- - - - - -"
                   className={`h-12 text-center text-xl font-semibold tracking-[0.5em] ${
                     errors.code ? 'border-destructive focus-visible:ring-destructive' : ''
                   }`}
                   autoFocus
+                  // T2-015 fix: maxLength + pattern + onInput sanitizer
+                  onInput={(e) => {
+                    const target = e.currentTarget as HTMLInputElement;
+                    target.value = target.value.replace(/\D/g, '').slice(0, 6);
+                  }}
                 />
                 {errors.code && (
                   <p className="text-sm font-medium text-destructive">{errors.code.message}</p>

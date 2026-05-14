@@ -12,10 +12,13 @@ const accountNumberSchema = z
   .min(1, 'Broj racuna je obavezan')
   .regex(/^\d{18}$/, 'Broj racuna mora imati tacno 18 cifara');
 
+// T2-014 fix: strozija validacija — bar 0.01, max 99,999,999.99 (8 cifara + 2 decimale).
+// Iznad toga BE BigDecimal moze prihvatiti, ali UI bi prikazao overflow i smatra se nerazumno.
 const positiveAmountSchema = z
   .number({ message: 'Iznos mora biti broj' })
   .positive('Iznos mora biti veci od 0')
-  .max(999999999999.99, 'Iznos prelazi maksimalnu dozvoljenu vrednost');
+  .min(0.01, 'Minimalni iznos je 0.01')
+  .max(99999999.99, 'Maksimalni iznos je 99,999,999.99');
 
 const paymentCodeSchema = z
   .string()

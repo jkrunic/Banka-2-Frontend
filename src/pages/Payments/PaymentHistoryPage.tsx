@@ -359,25 +359,32 @@ export default function PaymentHistoryPage() {
                 </select>
               </div>
 
+              {/* T2-011 fix: date input ignorise placeholder, koristi se eksplicitan label za Od/Do. */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground" htmlFor="dateFrom">Period</label>
+                <span className="text-sm font-medium text-muted-foreground">Period</span>
                 <div className="flex gap-2">
-                  <input
-                    id="dateFrom"
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Od"
-                  />
-                  <input
-                    id="dateTo"
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Do"
-                  />
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground/80" htmlFor="dateFrom">Od</label>
+                    <input
+                      id="dateFrom"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                      aria-label="Datum od"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground/80" htmlFor="dateTo">Do</label>
+                    <input
+                      id="dateTo"
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                      aria-label="Datum do"
+                    />
+                  </div>
                 </div>
               </div>
 

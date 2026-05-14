@@ -141,12 +141,17 @@ describe('CardListPage', () => {
       expect(screen.getByText(/Visa Debit/i)).toBeInTheDocument();
     });
 
-    // The active card has a Switch that is checked (true). Toggling it triggers block.
+    // The active card has a Switch that is checked (true). Toggling it triggers confirm dialog,
+    // sa SC30 fix-om iz 14.05.2026 — pa moramo da kliknemo "Blokiraj" u dialog-u da bi se
+    // pozvao cardService.block.
     const switches = screen.getAllByRole('switch');
-    // The first switch is for the active card (checked=true)
     const activeSwitch = switches.find(s => s.getAttribute('aria-checked') === 'true');
     if (activeSwitch) {
       await user.click(activeSwitch);
+      await waitFor(() => {
+        expect(screen.getByTestId('card-block-confirm-dialog')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('card-block-confirm-button'));
 
       await waitFor(() => {
         expect(mockCardService.block).toHaveBeenCalledWith(1);
@@ -183,9 +188,9 @@ describe('CardListPage', () => {
       expect(screen.getByText(/Visa Debit/i)).toBeInTheDocument();
     });
 
-    const newCardBtn = screen.queryByRole('button', { name: /Nova kartica|Zahtev za karticu/i });
+    const newCardBtn = screen.queryByRole('button', { name: /Nova kartica|Zatrazi novu karticu|Zahtev za karticu/i });
     // The button should exist
-    expect(newCardBtn || screen.queryByText(/Nova kartica|Zahtev/i)).toBeTruthy();
+    expect(newCardBtn || screen.queryByText(/Nova kartica|Zatrazi novu karticu|Zahtev/i)).toBeTruthy();
   });
 
   it('displays card expiration dates', async () => {
@@ -415,7 +420,7 @@ describe('CardListPage', () => {
       expect(screen.getByText(/Visa Debit/i)).toBeInTheDocument();
     });
 
-    const newCardBtn = screen.getByRole('button', { name: /Nova kartica/i });
+    const newCardBtn = screen.getByRole('button', { name: /Nova kartica|Zatrazi novu karticu/i });
     await user.click(newCardBtn);
 
     await waitFor(() => {
@@ -443,7 +448,7 @@ describe('CardListPage', () => {
     });
 
     // Open form
-    await user.click(screen.getByRole('button', { name: /Nova kartica/i }));
+    await user.click(screen.getByRole('button', { name: /Nova kartica|Zatrazi novu karticu/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Zahtev za novu karticu/i)).toBeInTheDocument();
@@ -473,7 +478,7 @@ describe('CardListPage', () => {
       expect(screen.getByText(/Visa Debit/i)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /Nova kartica/i }));
+    await user.click(screen.getByRole('button', { name: /Nova kartica|Zatrazi novu karticu/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Zahtev za novu karticu/i)).toBeInTheDocument();
@@ -542,7 +547,13 @@ describe('CardListPage', () => {
     const switches = screen.getAllByRole('switch');
     const activeSwitch = switches.find(s => s.getAttribute('aria-checked') === 'true');
     if (activeSwitch) {
+      // SC30 fix: switch sad otvara confirm dialog umesto direktnog poziva.
       await user.click(activeSwitch);
+      await waitFor(() => {
+        expect(screen.getByTestId('card-block-confirm-dialog')).toBeInTheDocument();
+      });
+      const confirmBtn = screen.getByTestId('card-block-confirm-button');
+      await user.click(confirmBtn);
       await waitFor(() => {
         expect(mockCardService.block).toHaveBeenCalled();
       });
@@ -699,10 +710,10 @@ describe('CardListPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/Nova kartica/i)).toBeInTheDocument();
+      expect(screen.getByText(/Nova kartica|Zatrazi novu karticu/i)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /Nova kartica/i }));
+    await user.click(screen.getByRole('button', { name: /Nova kartica|Zatrazi novu karticu/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Zahtev za novu karticu/i)).toBeInTheDocument();
@@ -739,7 +750,7 @@ describe('CardListPage', () => {
       expect(screen.getByText(/Visa Debit/i)).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('button', { name: /Nova kartica/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nova kartica|Zatrazi novu karticu/i })).not.toBeInTheDocument();
   });
 
   // ---------- Admin can unblock via switch ----------

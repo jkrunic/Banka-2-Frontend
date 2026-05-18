@@ -7,6 +7,11 @@ import type {
   CreateOtcOfferRequest,
   CounterOtcOfferRequest,
 } from '../types/celina3';
+import type {
+  OtcNegotiationHistoryDto,
+  OtcNegotiationHistoryPage,
+  OtcNegotiationHistoryFilters,
+} from '../types/otcHistory';
 
 /**
  * OTC API wrapper — odgovara `/otc/**` endpoint-ima backend-a.
@@ -87,6 +92,33 @@ const otcService = {
    */
   abandonContract: async (contractId: number): Promise<OtcContract> => {
     const { data } = await api.post<OtcContract>(`/otc/contracts/${contractId}/abandon`);
+    return data;
+  },
+
+  /**
+   * FE4 (7.3) — paginiran pregled istorije OTC pregovora sa opcionim filterima
+   * (status, korisnik, opseg datuma). BE: GET /otc/negotiation-history (B10) —
+   * dostupno samo ADMIN i SUPERVISOR ulogama.
+   */
+  getNegotiationHistory: async (
+    filters: OtcNegotiationHistoryFilters = {},
+  ): Promise<OtcNegotiationHistoryPage> => {
+    const { data } = await api.get<OtcNegotiationHistoryPage>('/otc/negotiation-history', {
+      params: filters,
+    });
+    return data;
+  },
+
+  /**
+   * FE4 (7.3) — hronoloski lanac svih izmena (kontraponuda) za jedan pregovor.
+   * BE: GET /otc/negotiation-history/{negotiationId} (B10).
+   */
+  getNegotiationHistoryById: async (
+    negotiationId: number,
+  ): Promise<OtcNegotiationHistoryDto[]> => {
+    const { data } = await api.get<OtcNegotiationHistoryDto[]>(
+      `/otc/negotiation-history/${negotiationId}`,
+    );
     return data;
   },
 };

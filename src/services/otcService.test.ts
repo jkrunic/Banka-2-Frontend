@@ -162,4 +162,67 @@ describe('otcService', () => {
       await expect(otcService.exerciseContract(1)).rejects.toThrow('Settlement date passed');
     });
   });
+
+  // --- FE4 (7.3) — istorija OTC pregovora ---
+
+  describe('getNegotiationHistory', () => {
+    const emptyPage = { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 };
+
+    it('salje GET /otc/negotiation-history sa filterima kao query params', async () => {
+      mockedApi.get.mockResolvedValue({ data: emptyPage });
+
+      await otcService.getNegotiationHistory({ status: 'ACCEPTED', page: 1, size: 20 });
+
+      expect(mockedApi.get).toHaveBeenCalledWith('/otc/negotiation-history', {
+        params: { status: 'ACCEPTED', page: 1, size: 20 },
+      });
+    });
+
+    it('salje prazan params objekat kad filteri nisu prosledjeni', async () => {
+      mockedApi.get.mockResolvedValue({ data: emptyPage });
+
+      await otcService.getNegotiationHistory();
+
+      expect(mockedApi.get).toHaveBeenCalledWith('/otc/negotiation-history', { params: {} });
+    });
+
+    it('vraca paginiran odgovor iz API-ja', async () => {
+      const page = {
+        content: [{ id: 1, negotiationId: 5 }],
+        totalElements: 1, totalPages: 1, number: 0, size: 20,
+      };
+      mockedApi.get.mockResolvedValue({ data: page });
+
+      const result = await otcService.getNegotiationHistory();
+
+      expect(result).toEqual(page);
+    });
+
+    it('propagira gresku (npr. 404 dok B10 nije aktivan)', async () => {
+      mockedApi.get.mockRejectedValue(new Error('404 not found'));
+      await expect(otcService.getNegotiationHistory()).rejects.toThrow('404 not found');
+    });
+  });
+
+  describe('getNegotiationHistoryById', () => {
+    it('salje GET /otc/negotiation-history/{negotiationId}', async () => {
+      mockedApi.get.mockResolvedValue({ data: [] });
+
+      await otcService.getNegotiationHistoryById(42);
+
+      expect(mockedApi.get).toHaveBeenCalledWith('/otc/negotiation-history/42');
+    });
+
+    it('vraca lanac kontraponuda iz API-ja', async () => {
+      const chain = [
+        { id: 1, negotiationId: 42 },
+        { id: 2, negotiationId: 42 },
+      ];
+      mockedApi.get.mockResolvedValue({ data: chain });
+
+      const result = await otcService.getNegotiationHistoryById(42);
+
+      expect(result).toEqual(chain);
+    });
+  });
 });

@@ -58,6 +58,7 @@ import OtcDiscoveryPage from './pages/Otc/OtcDiscoveryPage';
 import OtcNegotiationsPage from './pages/Otc/OtcNegotiationsPage';
 import OtcContractsPage from './pages/Otc/OtcContractsPage';
 import OtcMyPublicPage from './pages/Otc/OtcMyPublicPage';
+import OtcNegotiationHistoryPage from './pages/Otc/OtcNegotiationHistoryPage';
 
 // Celina 4 - Investicioni fondovi
 import FundsDiscoveryPage from './pages/Funds/FundsDiscoveryPage';
@@ -201,6 +202,12 @@ export default function App() {
             <Route path="/otc/pregovori" element={<OtcNegotiationsPage />} />
             <Route path="/otc/ugovori" element={<OtcContractsPage />} />
             <Route path="/otc/moje" element={<OtcMyPublicPage />} />
+          </Route>
+
+          {/* OTC istorija pregovora (FE4 7.3) — admin/supervizor portal;
+              B10 lista (/otc/negotiation-history) je admin/supervizor-only */}
+          <Route element={<ProtectedRoute supervisorOnly />}>
+            <Route path="/otc/negotiation-history" element={<OtcNegotiationHistoryPage />} />
           </Route>
 
           {/* Investicioni fondovi (Celina 4) — discovery i details su za sve */}

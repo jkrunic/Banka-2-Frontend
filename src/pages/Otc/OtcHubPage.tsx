@@ -66,7 +66,7 @@ function daysUntil(iso?: string | null): number | null {
 
 export default function OtcHubPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isSupervisor } = useAuth();
   const [data, setData] = useState<HubData>(INITIAL);
 
   useEffect(() => {
@@ -414,6 +414,21 @@ export default function OtcHubPage() {
           onClick={() => navigate('/otc/moje')}
           dataTestId="hub-my-public"
         />
+        {/* FE4 (7.3) — ulaz u istoriju OTC pregovora; samo admin/supervizor */}
+        {isSupervisor && (
+          <OtcHubCard
+            icon={Clock}
+            title="Istorija pregovora"
+            gradientFrom="from-slate-500"
+            gradientTo="to-gray-600"
+            primaryStat="Arhiva"
+            primaryStatLabel="pregovora i kontraponuda"
+            secondaryStat="Admin / supervizor pregled"
+            loading={data.loading}
+            onClick={() => navigate('/otc/negotiation-history')}
+            dataTestId="hub-negotiation-history"
+          />
+        )}
       </div>
 
       {/* Two columns: Activity + Trending */}

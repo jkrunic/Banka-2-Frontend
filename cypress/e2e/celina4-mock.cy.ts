@@ -935,6 +935,77 @@ describe('Mock C4: CreateOrder Fund Selector', () => {
 
 
 // ============================================================
+//  FEATURE: Istorija OTC pregovora (FE4 — zadatak 7.3 / jkrunic)
+// ============================================================
+const mockNegHistoryPage = {
+  content: [
+    {
+      id: 1, negotiationId: 10, quantity: 5, pricePerShare: 100, premium: 12,
+      settlementDate: '2026-06-30', status: 'ACTIVE', modifiedById: 7,
+      modifiedByName: 'Marko Petrović', createdAt: '2026-05-10T10:00:00',
+    },
+    {
+      id: 2, negotiationId: 11, quantity: 8, pricePerShare: 220, premium: 30,
+      settlementDate: '2026-07-15', status: 'ACCEPTED', modifiedById: 9,
+      modifiedByName: 'Jelena Đorđević', createdAt: '2026-05-12T14:00:00',
+    },
+  ],
+  totalElements: 2, totalPages: 1, number: 0, size: 20,
+};
+
+const mockNegChain = [
+  {
+    id: 1, negotiationId: 10, quantity: 5, pricePerShare: 100, premium: 12,
+    settlementDate: '2026-06-30', status: 'ACTIVE', modifiedById: 7,
+    modifiedByName: 'Marko Petrović', createdAt: '2026-05-10T10:00:00',
+  },
+];
+
+describe('Mock C4: Istorija OTC pregovora (FE4 7.3)', () => {
+  it('S-OH1: Supervizor vidi tabelu zapisa pregovora', () => {
+    cy.intercept('GET', '/api/otc/negotiation-history*', {
+      statusCode: 200, body: mockNegHistoryPage,
+    }).as('history');
+    cy.visit('/otc/negotiation-history', { onBeforeLoad: setupSupervisorSession });
+    cy.wait('@history');
+    cy.contains('Istorija OTC pregovora').should('be.visible');
+    cy.contains('#10').should('be.visible');
+    cy.contains('Marko Petrović').should('be.visible');
+  });
+
+  it('S-OH2: Prazno stanje kad nema zapisa', () => {
+    cy.intercept('GET', '/api/otc/negotiation-history*', {
+      statusCode: 200,
+      body: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+    }).as('history');
+    cy.visit('/otc/negotiation-history', { onBeforeLoad: setupSupervisorSession });
+    cy.wait('@history');
+    cy.get('[data-testid="otc-history-empty"]').should('exist');
+  });
+
+  it('S-OH3: Poruka kad B10 endpoint vrati 404', () => {
+    cy.intercept('GET', '/api/otc/negotiation-history*', { statusCode: 404, body: {} }).as('history');
+    cy.visit('/otc/negotiation-history', { onBeforeLoad: setupSupervisorSession });
+    cy.wait('@history');
+    cy.get('[data-testid="otc-history-unavailable"]').should('exist');
+  });
+
+  it('S-OH4: Expand reda prikazuje lanac kontraponuda', () => {
+    cy.intercept('GET', '/api/otc/negotiation-history*', {
+      statusCode: 200, body: mockNegHistoryPage,
+    }).as('history');
+    cy.intercept('GET', '/api/otc/negotiation-history/*', {
+      statusCode: 200, body: mockNegChain,
+    }).as('chain');
+    cy.visit('/otc/negotiation-history', { onBeforeLoad: setupSupervisorSession });
+    cy.wait('@history');
+    cy.get('[data-testid="otc-history-toggle-1"]').click();
+    cy.wait('@chain');
+    cy.get('[data-testid="otc-chain-table"]').should('be.visible');
+  });
+});
+
+// ============================================================
 //  FEATURE 7: OTC Inter-bank Discovery (Issue #67 / ekalajdzic13322)
 // ============================================================
 describe('Mock C4: OTC Inter-bank Discovery', () => {

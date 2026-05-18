@@ -1,4 +1,4 @@
-import { Component, useEffect, useState, useMemo, type ChangeEvent, type ReactNode } from 'react';
+import { Component, Fragment, useEffect, useState, useMemo, type ChangeEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Briefcase,
@@ -8,6 +8,9 @@ import {
   Wallet,
   ArrowRightLeft,
   Zap,
+  ChevronDown,
+  ChevronRight,
+  Coins,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -18,10 +21,12 @@ import type { PieLabelRenderProps } from 'recharts';
 import portfolioService from '@/services/portfolioService';
 import listingService from '@/services/listingService';
 import taxService from '@/services/taxService';
+import dividendService from '@/services/dividendService';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/lib/notify';
 import type { PortfolioItem, PortfolioSummary, TaxBreakdownItemDto } from '@/types/celina3';
-import { formatAmount, formatDateTime } from '@/utils/formatters';
+import type { DividendPayoutDto } from '@/types/dividend';
+import { formatAmount, formatDate, formatDateTime } from '@/utils/formatters';
 import { parseNumber } from '@/utils/numberUtils';
 
 import { Button } from '@/components/ui/button';
@@ -39,32 +44,122 @@ import {
 } from '@/components/ui/table';
 import MyFundsTab from '@/pages/Funds/MyFundsTab';
 
-/*
- * TODO [FE4 - Istorija dividendi | Developer: Jovan Krunic]
- *
- * Uz svaku STOCK poziciju u portfoliju prikazati istoriju primljenih dividendi:
- *
- *  1. Novi servis dividendService (src/services/dividendService.ts):
- *     - getDividendHistory(listingId): GET /portfolio/dividends?listingId=X
- *       vraca listu { date: string, amountGross: number, taxWithheld: number,
- *       amountNet: number, currency: string }.
- *     - getMyDividendSummary(): GET /portfolio/dividends/summary — ukupno primljeno
- *       po valuti (za KPI chip na vrhu stranice).
- *
- *  2. Prikaz po poziciji — jedna od sledecih opcija:
- *     (a) Nova kolona "Dividende" u tabeli hartija sa ukupnim iznosom i
- *         klikom koji razvija inlajn red sa historijom;
- *     (b) Poseban "Dividende" tab pored "Moje hartije" i "Moji fondovi";
- *     (c) Expand dugme po redu koje otvara Accordion sa listom isplata.
- *
- *  3. Svaki red istorije prikazuje: datum isplate, bruto iznos, porez po odbitku,
- *     neto iznos, valuta — sve formatirane kroz formatAmount + sr-RS locale.
- *
- *  4. Opcionalno: KPI chip "Ukupne dividende YTD" u summary kartici na vrhu
- *     (paritet sa Neto vrednost / ROI chipovima).
- *
- *  Tip podataka dodati u src/types/celina3.ts (DividendRecord interface).
+// ============================================================
+// FE4 (7.1) — Istorija dividendi u portfoliju (Developer: Jovan Krunic)
+// Uz svaku STOCK poziciju prikazuje se expand red sa istorijom primljenih
+// dividendi (datum isplate, bruto, porez, neto, valuta). Podaci se lazy-load-uju
+// sa B9 endpoint-a GET /dividends/by-position/{portfolioId} prvi put kad se
+// pozicija razvije; 404/501/405 se tretira kao "BE jos nije dostupan".
+// ============================================================
+
+type DividendLoadStatus = 'loading' | 'ready' | 'error' | 'unavailable';
+
+/**
+ * Inline panel sa istorijom primljenih dividendi za jednu STOCK poziciju —
+ * renderuje se kao expand red ispod reda hartije u tabeli portfolija.
  */
+function DividendHistoryPanel({
+  status,
+  rows,
+}: {
+  status: DividendLoadStatus | undefined;
+  rows: DividendPayoutDto[] | undefined;
+}) {
+  if (status === undefined || status === 'loading') {
+    return (
+      <div className="space-y-2 py-2" data-testid="dividend-history-loading">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-8 animate-pulse rounded bg-muted/50" />
+        ))}
+      </div>
+    );
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <Alert data-testid="dividend-history-unavailable">
+        <AlertDescription>
+          Istorija dividendi trenutno nije dostupna (BE endpoint nije implementiran).
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <Alert variant="destructive" data-testid="dividend-history-error">
+        <AlertDescription>
+          Greška pri učitavanju istorije dividendi. Pokušajte ponovo kasnije.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!rows || rows.length === 0) {
+    return (
+      <div
+        className="flex flex-col items-center py-6 text-center"
+        data-testid="dividend-history-empty"
+      >
+        <Coins className="mb-2 h-6 w-6 text-muted-foreground" />
+        <p className="text-sm font-medium">Nema primljenih dividendi za ovu poziciju</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Kvartalne isplate dividendi će se prikazati ovde.
+        </p>
+      </div>
+    );
+  }
+
+  const totalNet = rows.reduce((sum, r) => sum + (Number(r.netAmount) || 0), 0);
+  const currency = rows[0]?.currencyCode ?? '';
+
+  return (
+    <div className="space-y-2 py-2" data-testid="dividend-history-table">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Coins className="h-4 w-4 text-amber-500" />
+        Istorija primljenih dividendi
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Datum isplate</TableHead>
+            <TableHead className="text-right">Količina</TableHead>
+            <TableHead className="text-right">Bruto</TableHead>
+            <TableHead className="text-right">Porez</TableHead>
+            <TableHead className="text-right">Neto</TableHead>
+            <TableHead>Valuta</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell>{formatDate(r.paymentDate)}</TableCell>
+              <TableCell className="text-right font-mono">
+                {formatAmount(r.quantity, 0)}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {formatAmount(r.grossAmount)}
+              </TableCell>
+              <TableCell className="text-right font-mono text-red-600 dark:text-red-400">
+                {r.taxExempt ? '—' : formatAmount(r.tax)}
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                {formatAmount(r.netAmount)}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{r.currencyCode}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <p className="text-right text-xs text-muted-foreground">
+        Ukupno neto primljeno:{' '}
+        <span className="font-semibold text-foreground">
+          {formatAmount(totalNet)} {currency}
+        </span>
+      </p>
+    </div>
+  );
+}
 
 function formatPercent(value: number | null | undefined): string {
   const num = typeof value === 'number' ? value : parseNumber(value);
@@ -326,6 +421,12 @@ export default function PortfolioPage() {
   const [taxBreakdownLoading, setTaxBreakdownLoading] = useState(false);
   const [taxBreakdownError, setTaxBreakdownError] = useState<'unavailable' | 'error' | null>(null);
 
+  // FE4 (7.1) — istorija dividendi po STOCK poziciji. Lazy-loaded prvi put kad
+  // se pozicija razvije; rezultat se kesira po id-u pozicije.
+  const [expandedDividends, setExpandedDividends] = useState<number | null>(null);
+  const [dividendCache, setDividendCache] = useState<Record<number, DividendPayoutDto[]>>({});
+  const [dividendStatus, setDividendStatus] = useState<Record<number, DividendLoadStatus>>({});
+
   useEffect(() => {
     if (activeTab !== 'tax') return;
     if (taxBreakdown !== null) return; // vec ucitan
@@ -475,6 +576,34 @@ export default function PortfolioPage() {
     } finally {
       setExercisingId(null);
     }
+  };
+
+  // FE4 (7.1) — expand/collapse istorije dividendi za STOCK poziciju.
+  const toggleDividendHistory = (item: PortfolioItem) => {
+    const id = item.id;
+    if (expandedDividends === id) {
+      setExpandedDividends(null);
+      return;
+    }
+    setExpandedDividends(id);
+
+    // Lazy fetch — samo prvi put po poziciji; rezultat ostaje keširan.
+    if (dividendStatus[id]) return;
+    setDividendStatus((prev) => ({ ...prev, [id]: 'loading' }));
+    void dividendService
+      .getDividendsByPosition(id)
+      .then((rows) => {
+        setDividendCache((prev) => ({ ...prev, [id]: Array.isArray(rows) ? rows : [] }));
+        setDividendStatus((prev) => ({ ...prev, [id]: 'ready' }));
+      })
+      .catch((err: unknown) => {
+        const httpStatus = (err as { response?: { status?: number } })?.response?.status;
+        const next: DividendLoadStatus =
+          httpStatus === 404 || httpStatus === 501 || httpStatus === 405
+            ? 'unavailable'
+            : 'error';
+        setDividendStatus((prev) => ({ ...prev, [id]: next }));
+      });
   };
 
   const totalValue = summary?.totalValue ?? 0;
@@ -686,9 +815,11 @@ export default function PortfolioPage() {
                         : false;
                       const canExercise =
                         isOption && isEmployee && !isExpired && item.inTheMoney === true;
+                      const isDividendsOpen = expandedDividends === item.id;
 
                       return (
-                        <TableRow key={item.id}>
+                        <Fragment key={item.id}>
+                        <TableRow>
                           <TableCell>
                             <Badge variant={getListingTypeBadgeVariant(item.listingType)}>
                               {getListingTypeLabel(item.listingType)}
@@ -696,9 +827,29 @@ export default function PortfolioPage() {
                           </TableCell>
 
                           <TableCell className="font-medium">
-                            <div>{item.listingTicker}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.listingName}
+                            <div className="flex items-center gap-1.5">
+                              {isStock && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleDividendHistory(item)}
+                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  title="Istorija dividendi"
+                                  aria-expanded={isDividendsOpen}
+                                  data-testid={`dividend-toggle-${item.id}`}
+                                >
+                                  {isDividendsOpen ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
+                              <div>
+                                <div>{item.listingTicker}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {item.listingName}
+                                </div>
+                              </div>
                             </div>
                           </TableCell>
 
@@ -809,6 +960,17 @@ export default function PortfolioPage() {
                             </div>
                           </TableCell>
                         </TableRow>
+                        {isStock && isDividendsOpen && (
+                          <TableRow>
+                            <TableCell colSpan={11} className="bg-muted/20">
+                              <DividendHistoryPanel
+                                status={dividendStatus[item.id]}
+                                rows={dividendCache[item.id]}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </TableBody>

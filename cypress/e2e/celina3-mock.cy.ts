@@ -803,6 +803,60 @@ describe('Feature: Moj portfolio', () => {
 });
 
 // ====================================================================
+// SECTION 6b: Istorija dividendi u portfoliju (FE4 — zadatak 7.1)
+// ====================================================================
+
+describe('Feature: Istorija dividendi u portfoliju (FE4 7.1)', () => {
+  const mockDividends = [
+    {
+      id: 1, ownerId: 1, ownerType: 'CLIENT', stockListingId: 1, stockTicker: 'MSFT',
+      quantity: 25, priceOnDate: 420.50, dividendYieldRate: 0.0018,
+      grossAmount: 18.92, tax: 2.84, netAmount: 16.08, creditedAccountId: 100,
+      currencyCode: 'USD', paymentDate: '2026-03-31', taxExempt: false,
+      createdAt: '2026-03-31T17:00:00',
+    },
+  ];
+
+  beforeEach(() => {
+    setupMocks();
+    cy.intercept('GET', '**/api/portfolio/my', { statusCode: 200, body: mockPortfolio });
+    cy.intercept('GET', '**/api/portfolio/summary', { statusCode: 200, body: mockPortfolioSummary });
+  });
+
+  it('FE4-D1: STOCK pozicija ima dugme za razvijanje istorije dividendi', () => {
+    cy.intercept('GET', '**/api/dividends/by-position/*', { statusCode: 200, body: [] });
+    cy.visit('/portfolio', { onBeforeLoad: setupClientSession });
+    cy.get('[data-testid="dividend-toggle-1"]').should('exist');
+  });
+
+  it('FE4-D2: Razvijanje pozicije prikazuje istoriju primljenih dividendi', () => {
+    cy.intercept('GET', '**/api/dividends/by-position/1', {
+      statusCode: 200,
+      body: mockDividends,
+    }).as('divs');
+    cy.visit('/portfolio', { onBeforeLoad: setupClientSession });
+    cy.get('[data-testid="dividend-toggle-1"]').click();
+    cy.wait('@divs');
+    cy.get('[data-testid="dividend-history-table"]').should('be.visible');
+    cy.contains('Istorija primljenih dividendi').should('be.visible');
+  });
+
+  it('FE4-D3: Pozicija bez dividendi prikazuje prazno stanje', () => {
+    cy.intercept('GET', '**/api/dividends/by-position/*', { statusCode: 200, body: [] });
+    cy.visit('/portfolio', { onBeforeLoad: setupClientSession });
+    cy.get('[data-testid="dividend-toggle-1"]').click();
+    cy.get('[data-testid="dividend-history-empty"]').should('be.visible');
+  });
+
+  it('FE4-D4: 404 sa BE prikazuje poruku da endpoint nije dostupan', () => {
+    cy.intercept('GET', '**/api/dividends/by-position/*', { statusCode: 404, body: {} });
+    cy.visit('/portfolio', { onBeforeLoad: setupClientSession });
+    cy.get('[data-testid="dividend-toggle-1"]').click();
+    cy.get('[data-testid="dividend-history-unavailable"]').should('be.visible');
+  });
+});
+
+// ====================================================================
 // SECTION 7: Porez tracking (S74-S81)
 // ====================================================================
 

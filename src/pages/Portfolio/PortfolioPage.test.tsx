@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PortfolioPage from './PortfolioPage';
 import { renderWithProviders } from '../../test/test-utils';
 import type { PortfolioItem, PortfolioSummary } from '@/types/celina3';
+import type { DividendPayoutDto } from '@/types/dividend';
 
 const mockNavigate = vi.fn();
 
@@ -53,9 +54,29 @@ const mockItems: PortfolioItem[] = [
   },
 ];
 
+const mockDividend: DividendPayoutDto = {
+  id: 1,
+  ownerId: 42,
+  ownerType: 'CLIENT',
+  stockListingId: 1,
+  stockTicker: 'AAPL',
+  quantity: 50,
+  priceOnDate: 178.5,
+  dividendYieldRate: 0.005,
+  grossAmount: 50,
+  tax: 7.5,
+  netAmount: 42.5,
+  creditedAccountId: 265,
+  currencyCode: 'USD',
+  paymentDate: '2026-03-31',
+  taxExempt: false,
+  createdAt: '2026-03-31T17:00:00Z',
+};
+
 const mockGetSummary = vi.fn().mockResolvedValue(mockSummary);
 const mockGetMyPortfolio = vi.fn().mockResolvedValue(mockItems);
 const mockSetPublicQuantity = vi.fn().mockResolvedValue({ ...mockItems[0], publicQuantity: 20 });
+const mockGetDividendsByPosition = vi.fn();
 
 vi.mock('../../services/portfolioService', () => ({
   default: {
@@ -68,6 +89,13 @@ vi.mock('../../services/portfolioService', () => ({
 vi.mock('../../services/listingService', () => ({
   default: {
     exerciseOption: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('../../services/dividendService', () => ({
+  default: {
+    getMyDividends: vi.fn(),
+    getDividendsByPosition: (...args: unknown[]) => mockGetDividendsByPosition(...args),
   },
 }));
 
@@ -95,6 +123,7 @@ describe('PortfolioPage', () => {
     vi.clearAllMocks();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetMyPortfolio.mockResolvedValue(mockItems);
+    mockGetDividendsByPosition.mockResolvedValue([]);
   });
 
   it('renders the page header', async () => {
@@ -253,5 +282,130 @@ describe('PortfolioPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Moji fondovi' }));
     expect(screen.getByText('Mocked MyFundsTab Content')).toBeInTheDocument();
+  });
+
+  // --- FE4 (7.1) — istorija dividendi po poziciji ---
+
+  it('renders dividend history toggle only for STOCK positions', async () => {
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('AAPL')).toBeInTheDocument();
+    });
+
+    // AAPL je STOCK -> ima toggle; ES=F je FUTURES -> nema.
+    expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('dividend-toggle-2')).not.toBeInTheDocument();
+  });
+
+  it('expands dividend history and shows empty state when no dividends', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockResolvedValue([]);
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+
+    expect(mockGetDividendsByPosition).toHaveBeenCalledWith(1);
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-empty')).toBeInTheDocument();
+    });
+  });
+
+  it('renders dividend payout rows when history exists', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockResolvedValue([mockDividend]);
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-table')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Istorija primljenih dividendi')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
+  });
+
+  it('shows unavailable message when dividend endpoint is not implemented (404)', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockRejectedValue({ response: { status: 404 } });
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-unavailable')).toBeInTheDocument();
+    });
+  });
+
+  it('collapses dividend history on second toggle click', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockResolvedValue([]);
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-empty')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('dividend-history-empty')).not.toBeInTheDocument();
+    });
+
+    // Drugi klik (collapse) ne sme da pravi novi BE poziv — rezultat je keširan.
+    expect(mockGetDividendsByPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows error message when dividend endpoint fails with a non-404 error', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockRejectedValue({ response: { status: 500 } });
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-error')).toBeInTheDocument();
+    });
+  });
+
+  it('renders em-dash for tax on a tax-exempt (EMPLOYEE) dividend', async () => {
+    const user = userEvent.setup();
+    mockGetDividendsByPosition.mockResolvedValue([
+      { ...mockDividend, id: 9, taxExempt: true, tax: 0 },
+    ]);
+    renderWithProviders(<PortfolioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-toggle-1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('dividend-toggle-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dividend-history-table')).toBeInTheDocument();
+    });
+    // Tax-exempt red prikazuje '—' umesto iznosa poreza.
+    const table = screen.getByTestId('dividend-history-table');
+    expect(within(table).getByText('—')).toBeInTheDocument();
   });
 });

@@ -1,39 +1,89 @@
-// ============================================================
-// TODO [FE4 - Dividende + statistika fondova + istorija OTC | Developer: Jovan Krunic]
-//
-// Testovi za dividendService.
-//
-// IMPLEMENTIRATI (posle implementacije servisa):
-//   - Svaki test mockuje './api' default export sa vi.mock
-//   - vi.mocked(api.get).mockResolvedValue({ data: <stub> }) pattern
-//   - Posle svakog testa: vi.clearAllMocks()
-//
-// Planirani test slucajevi:
-//   1. 'getMyDividends — poziva GET /dividends/my bez params'
-//   2. 'getMyDividends — prosledjuje ticker, fromDate, toDate kao query params'
-//   3. 'getMyDividends — prosledjuje page i size kao query params'
-//   4. 'getMyDividends — vraca data iz axios odgovora'
-//   5. 'getDividendSummary — poziva GET /dividends/my/summary'
-//   6. 'getDividendSummary — vraca DividendSummaryDto iz odgovora'
-//   7. 'getDividendsByListing — poziva GET /dividends/listings/{listingId}'
-//   8. 'getDividendsByListing — prosledjuje fromDate i toDate kao query params'
-//   9. 'getDividendsByListing — vraca paginiranu listu iz odgovora'
-//  10. 'getMyDividends — baca gresku ako axios odbije (network error)'
-//  11. 'getDividendSummary — baca gresku ako axios vrati 403'
-// ============================================================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { describe, it } from 'vitest';
+// Mockujem api modul pre dividend service import-a
+vi.mock('./api', () => ({
+  default: {
+    get: vi.fn(),
+  },
+}));
+
+import dividendService from './dividendService';
+import api from './api';
+import type { DividendPayoutDto } from '../types/dividend';
+
+const mockGet = api.get as ReturnType<typeof vi.fn>;
+
+const sampleDividend: DividendPayoutDto = {
+  id: 1,
+  ownerId: 42,
+  ownerType: 'CLIENT',
+  stockListingId: 7,
+  stockTicker: 'AAPL',
+  quantity: 50,
+  priceOnDate: 200,
+  dividendYieldRate: 0.005,
+  grossAmount: 50,
+  tax: 7.5,
+  netAmount: 42.5,
+  creditedAccountId: 265,
+  currencyCode: 'USD',
+  paymentDate: '2026-03-31',
+  taxExempt: false,
+  createdAt: '2026-03-31T17:00:00',
+};
 
 describe('dividendService', () => {
-  it.todo('getMyDividends — poziva GET /dividends/my bez params');
-  it.todo('getMyDividends — prosledjuje ticker, fromDate, toDate kao query params');
-  it.todo('getMyDividends — prosledjuje page i size kao query params');
-  it.todo('getMyDividends — vraca data iz axios odgovora');
-  it.todo('getDividendSummary — poziva GET /dividends/my/summary');
-  it.todo('getDividendSummary — vraca DividendSummaryDto iz odgovora');
-  it.todo('getDividendsByListing — poziva GET /dividends/listings/{listingId}');
-  it.todo('getDividendsByListing — prosledjuje fromDate i toDate kao query params');
-  it.todo('getDividendsByListing — vraca paginiranu listu iz odgovora');
-  it.todo('getMyDividends — baca gresku ako axios odbije (network error)');
-  it.todo('getDividendSummary — baca gresku ako axios vrati 403');
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('getMyDividends', () => {
+    it('salje GET /dividends/my', async () => {
+      mockGet.mockResolvedValue({ data: [] });
+
+      await dividendService.getMyDividends();
+
+      expect(mockGet).toHaveBeenCalledWith('/dividends/my');
+    });
+
+    it('vraca listu dividendi iz BE odgovora', async () => {
+      mockGet.mockResolvedValue({ data: [sampleDividend] });
+
+      const result = await dividendService.getMyDividends();
+
+      expect(result).toEqual([sampleDividend]);
+    });
+
+    it('propagira gresku ako api odbije zahtev', async () => {
+      mockGet.mockRejectedValue(new Error('network error'));
+
+      await expect(dividendService.getMyDividends()).rejects.toThrow('network error');
+    });
+  });
+
+  describe('getDividendsByPosition', () => {
+    it('salje GET /dividends/by-position/{portfolioId}', async () => {
+      mockGet.mockResolvedValue({ data: [] });
+
+      await dividendService.getDividendsByPosition(99);
+
+      expect(mockGet).toHaveBeenCalledWith('/dividends/by-position/99');
+    });
+
+    it('vraca istoriju dividendi za poziciju iz BE odgovora', async () => {
+      mockGet.mockResolvedValue({ data: [sampleDividend] });
+
+      const result = await dividendService.getDividendsByPosition(7);
+
+      expect(result).toEqual([sampleDividend]);
+    });
+
+    it('propagira gresku ako api odbije zahtev', async () => {
+      mockGet.mockRejectedValue(new Error('403 forbidden'));
+
+      await expect(dividendService.getDividendsByPosition(7)).rejects.toThrow(
+        '403 forbidden',
+      );
+    });
+  });
 });

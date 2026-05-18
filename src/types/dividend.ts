@@ -1,39 +1,39 @@
 // ============================================================
-// TODO [FE4 - Dividende + statistika fondova + istorija OTC | Developer: Jovan Krunic]
+// FE4 — Istorija dividendi u portfoliju (zadatak 7.1, Developer: Jovan Krunic)
 //
-// Tipovi za istoriju isplacenih dividendi po poziciji u portfoliju.
-//
-// IMPLEMENTIRATI:
-//   - DividendPayoutDto: {
-//       id: number,
-//       listingId: number,
-//       ticker: string,
-//       listingName: string,
-//       accountId: number,
-//       accountNumber: string,
-//       amountPerShare: number,
-//       quantity: number,
-//       totalAmount: number,
-//       currencyCode: string,
-//       exDate: string,       // ISO date — dan kada je vlasnik registrovan za dividendu
-//       paymentDate: string,  // ISO date — dan kada je iznos prenet na racun
-//       createdAt: string,
-//     }
-//   - DividendSummaryDto: {
-//       totalReceivedRsd: number,   // sve dividende konvertovane u RSD
-//       totalReceivedByTicker: Record<string, number>,  // ticker -> ukupni iznos u originalnoj valuti
-//       lastPaymentDate: string | null,
-//     }
-//   - DividendFilterParams: {
-//       ticker?: string,
-//       fromDate?: string,   // ISO date
-//       toDate?: string,     // ISO date
-//       page?: number,
-//       size?: number,
-//     }
-//
-// Konvencija: pratiti postojecu `Savings` feature celinu kao sablon.
-// Spec: Zadaci_Frontend.pdf, FE4.
+// Tipovi odgovaraju B9 backend ugovoru (DividendController / DividendPayoutDto).
 // ============================================================
 
-export {};
+/** Vlasnik koji je primio dividendu. */
+export type DividendOwnerType = 'CLIENT' | 'EMPLOYEE';
+
+/**
+ * Jedna isplacena dividenda — odgovor sa GET /dividends/my i
+ * GET /dividends/by-position/{portfolioId}. Mapira se 1:1 iz BE DividendPayoutDto.
+ */
+export interface DividendPayoutDto {
+  id: number;
+  ownerId: number;
+  ownerType: DividendOwnerType;
+  stockListingId: number;
+  stockTicker: string;
+  quantity: number;
+  /** Cena akcije na dan obracuna. */
+  priceOnDate: number;
+  /** Kvartalni prinos (godisnji dividendYield / 4). */
+  dividendYieldRate: number;
+  /** Bruto iznos pre poreza. */
+  grossAmount: number;
+  /** Iznos poreza po odbitku (0 za EMPLOYEE — vidi taxExempt). */
+  tax: number;
+  /** Neto iznos knjizen na racun. */
+  netAmount: number;
+  creditedAccountId: number;
+  currencyCode: string;
+  /** ISO datum isplate (YYYY-MM-DD). */
+  paymentDate: string;
+  /** true za EMPLOYEE (aktuar drzi akcije u ime banke — bez 15% poreza). */
+  taxExempt: boolean;
+  /** ISO datetime kreiranja zapisa. */
+  createdAt: string;
+}

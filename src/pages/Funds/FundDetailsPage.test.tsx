@@ -10,6 +10,8 @@ const mockGet = vi.fn();
 const mockGetPerformance = vi.fn();
 const mockMyPositions = vi.fn();
 const mockBankPositions = vi.fn();
+const mockListFunds = vi.fn();
+const mockGetFundStatistics = vi.fn();
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -32,8 +34,15 @@ vi.mock('@/services/investmentFundService', () => ({
   default: {
     get: (...a: unknown[]) => mockGet(...a),
     getPerformance: (...a: unknown[]) => mockGetPerformance(...a),
+    list: (...a: unknown[]) => mockListFunds(...a),
     myPositions: (...a: unknown[]) => mockMyPositions(...a),
     bankPositions: (...a: unknown[]) => mockBankPositions(...a),
+  },
+}));
+
+vi.mock('@/services/fundStatisticsService', () => ({
+  default: {
+    getFundStatistics: (...a: unknown[]) => mockGetFundStatistics(...a),
   },
 }));
 
@@ -71,10 +80,21 @@ const FUND = {
 };
 
 const PERFORMANCE = [
-  { date: '2026-01-01', value: 4_800_000 },
-  { date: '2026-02-01', value: 4_950_000 },
-  { date: '2026-03-01', value: 5_000_000 },
+  { date: '2026-01-01', fundValue: 4_800_000, profit: 0 },
+  { date: '2026-02-01', fundValue: 4_950_000, profit: 150_000 },
+  { date: '2026-03-01', fundValue: 5_000_000, profit: 200_000 },
 ];
+
+const FUND_STATS = {
+  fundId: 101,
+  fundName: 'Alpha Growth',
+  snapshotCount: 90,
+  annualizedReturnPercent: 12.34,
+  volatilityPercent: 4.2,
+  maxDrawdownPercent: -8.5,
+  rewardToVariabilityRatio: 2.94,
+  sufficientHistory: true,
+};
 
 describe('FundDetailsPage', () => {
   beforeEach(() => {
@@ -84,6 +104,8 @@ describe('FundDetailsPage', () => {
     mockGetPerformance.mockResolvedValue(PERFORMANCE);
     mockMyPositions.mockResolvedValue([]);
     mockBankPositions.mockResolvedValue([]);
+    mockListFunds.mockResolvedValue([{ id: 101 }, { id: 102 }]);
+    mockGetFundStatistics.mockResolvedValue(FUND_STATS);
   });
 
   it('prikazuje loading skeleton dok ucitava', () => {
@@ -133,9 +155,12 @@ describe('FundDetailsPage', () => {
 
   it('promena perioda re-fetchuje performance', async () => {
     renderWithProviders(<FundDetailsPage />);
-    await waitFor(() => expect(mockGetPerformance).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetPerformance).toHaveBeenCalled());
+    // getPerformance zovu i glavni efekat i benchmark efekat (FE4 7.2), pa
+    // proveravamo da promena perioda pokreće NOV fetch, ne tačan broj poziva.
+    mockGetPerformance.mockClear();
     await userEvent.click(screen.getByText('1G'));
-    await waitFor(() => expect(mockGetPerformance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockGetPerformance).toHaveBeenCalled());
   });
 
   it('back arrow dugme navigira na /funds', async () => {
@@ -173,5 +198,37 @@ describe('FundDetailsPage', () => {
     await waitFor(() => expect(mockGet).toHaveBeenCalled());
     await waitFor(() => expect(mockMyPositions).toHaveBeenCalled());
     expect(mockBankPositions).not.toHaveBeenCalled();
+  });
+
+  // --- FE4 (7.2) — statistika fondova ---
+
+  it('prikazuje karticu Metrike performansi sa metrikama (B12)', async () => {
+    renderWithProviders(<FundDetailsPage />);
+    await waitFor(() =>
+      expect(screen.getByText('Metrike performansi')).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('fund-stats-grid')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Godišnji prinos')).toBeInTheDocument();
+    expect(screen.getByText('Volatilnost')).toBeInTheDocument();
+  });
+
+  it('prikazuje poruku kad B12 metrike nisu dostupne (404)', async () => {
+    mockGetFundStatistics.mockRejectedValue({ response: { status: 404 } });
+    renderWithProviders(<FundDetailsPage />);
+    await waitFor(() =>
+      expect(screen.getByTestId('fund-stats-unavailable')).toBeInTheDocument(),
+    );
+  });
+
+  it('renderuje uporedni grafik (Poređenje sa prosekom fondova)', async () => {
+    renderWithProviders(<FundDetailsPage />);
+    await waitFor(() =>
+      expect(screen.getByText('Poređenje sa prosekom fondova')).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('fund-comparison-chart')).toBeInTheDocument(),
+    );
   });
 });

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from '@/lib/notify';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area, LineChart, Line, Legend,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import {
   ArrowLeft,
@@ -20,8 +21,10 @@ import {
 import * as Dialog from '@radix-ui/react-dialog';
 import { useAuth } from '@/context/AuthContext';
 import investmentFundService from '@/services/investmentFundService';
+import fundStatisticsService from '@/services/fundStatisticsService';
 import { employeeService } from '@/services/employeeService';
 import type { InvestmentFundDetail, FundPerformancePoint, ClientFundPosition } from '@/types/celina4';
+import type { FundStatisticsDto } from '@/types/fundStatistics';
 import type { Employee } from '@/types';
 import { formatAmount, formatDate, formatPrice, getErrorMessage, toIsoDateOnly } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
@@ -38,31 +41,55 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-/*
- * TODO [FE4 - Statistika fondova | Developer: Jovan Krunic]
- *
- * Na detaljnoj stranici fonda prikazati sve metrike performansi i prosiriti grafike:
- *
- *  1. Kartica / sekcija "Metrike performansi" (pored ili ispod postojeceg grafa):
- *     - Anualizovani prinos (%) — fundStatisticsService.getFundStatistics(fundId);
- *     - Sharpe ratio (Prinos/Rizik);
- *     - Maksimalni drawdown (%) — crvena boja;
- *     - Volatilnost (%) — godisnja standardna devijacija.
- *     Svaku metriku prikazati kao <Card> chip sa naslovom i vrednoscu
- *     (paritet sa KPI chip-ovima na OtcHubPage i HomePage).
- *
- *  2. Prosiriti postojeci grafik istorijske vrednosti fonda:
- *     - Dodati drugu liniju / oblast "Prosek svih fondova" (benchmark linija)
- *       iz fundStatisticsService.getBenchmarkPerformance(period);
- *     - Koristiti razlicitu boju (npr. amber) i isprekidanu liniju za benchmark;
- *     - Legenda ispod grafa sa objasnjenjima obe linije.
- *
- *  3. Opcionalni "Uporedni grafik" tab sa mogucnoscu biranja vise fondova
- *     za poredjenje (MultiSelectFundCombobox + vise linija na istom ResponsiveContainer).
- *
- *  Tipove FundStatistics i BenchmarkPoint dodati u src/types/celina4.ts.
- *  Servis: src/services/fundStatisticsService.ts (isti kao u FundsDiscoveryPage).
- */
+// ============================================================
+// FE4 (7.2) — Statistika fondova: detaljan prikaz (Developer: Jovan Krunic)
+// Dodaje karticu sa metrikama performansi (B12 GET /funds/{id}/statistics) i
+// uporedni grafik (indeks = 100 na početku perioda) fonda naspram proseka
+// svih fondova. Dok B12 nije dostupan (404), metrike graciozno degradiraju.
+// ============================================================
+
+type StatsStatus = 'loading' | 'ready' | 'unavailable' | 'error';
+
+/** Indeksira seriju performansi: svaka tačka = vrednost / prva_vrednost * 100, po datumu. */
+function toIndexMap(points: FundPerformancePoint[]): Map<string, number> {
+  const map = new Map<string, number>();
+  const base = points[0]?.fundValue ?? 0;
+  if (base <= 0) return map;
+  for (const p of points) {
+    map.set(p.date, (p.fundValue / base) * 100);
+  }
+  return map;
+}
+
+/** KPI chip za jednu metriku performansi fonda; `null` vrednost -> „—". */
+function MetricChip({
+  label,
+  value,
+  suffix = '%',
+  colored = false,
+}: {
+  label: string;
+  value: number | null;
+  suffix?: string;
+  colored?: boolean;
+}) {
+  const hasValue = typeof value === 'number' && !Number.isNaN(value);
+  const colorClass =
+    hasValue && colored ? (value >= 0 ? 'text-emerald-500' : 'text-red-500') : '';
+  return (
+    <div className="rounded-lg border bg-muted/20 p-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-xl font-bold font-mono tabular-nums ${colorClass}`}>
+        {hasValue
+          ? `${value.toLocaleString('sr-RS', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}${suffix}`
+          : '—'}
+      </p>
+    </div>
+  );
+}
 
 type PerfPeriod = 'month' | 'quarter' | 'year';
 
@@ -91,6 +118,10 @@ export default function FundDetailsPage() {
   const [fund, setFund] = useState<InvestmentFundDetail | null>(null);
   const [performance, setPerformance] = useState<FundPerformancePoint[]>([]);
   const [loading, setLoading] = useState(true);
+  // FE4 (7.2) — metrike performansi (B12) + podaci za uporedni grafik.
+  const [stats, setStats] = useState<FundStatisticsDto | null>(null);
+  const [statsStatus, setStatsStatus] = useState<StatsStatus>('loading');
+  const [benchmarkByDate, setBenchmarkByDate] = useState<Map<string, number>>(new Map());
   // P1.2 — admin dialog za reassign manager.
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
   const [supervisors, setSupervisors] = useState<Employee[]>([]);
@@ -216,6 +247,74 @@ export default function FundDetailsPage() {
 
     return () => { cancelled = true; };
   }, [id, perfPeriod, navigate]);
+
+  // FE4 (7.2) — metrike fonda (B12). Zaseban poziv: 404 ne sme da obori stranicu
+  // (zato NIJE u Promise.all sa fund/performance iznad).
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void fundStatisticsService
+      .getFundStatistics(Number(id))
+      .then((data) => {
+        if (cancelled) return;
+        setStats(data);
+        setStatsStatus('ready');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const s = (err as { response?: { status?: number } })?.response?.status;
+        setStatsStatus(s === 404 || s === 501 || s === 405 ? 'unavailable' : 'error');
+      });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // FE4 (7.2) — prosek performansi svih fondova (indeksiran na 100) za uporedni grafik.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    const range = getPerfRange(perfPeriod);
+    void investmentFundService
+      .list()
+      .then((allFunds) =>
+        Promise.allSettled(
+          allFunds.map((f) =>
+            investmentFundService.getPerformance(f.id, range.from, range.to),
+          ),
+        ),
+      )
+      .then((results) => {
+        if (cancelled) return;
+        // Svaku seriju indeksiraj na 100 pa uprosečuj po datumu.
+        const sums = new Map<string, { sum: number; count: number }>();
+        for (const r of results) {
+          if (r.status !== 'fulfilled') continue;
+          for (const [date, idx] of toIndexMap(r.value)) {
+            const cur = sums.get(date) ?? { sum: 0, count: 0 };
+            sums.set(date, { sum: cur.sum + idx, count: cur.count + 1 });
+          }
+        }
+        const avg = new Map<string, number>();
+        for (const [date, { sum, count }] of sums) {
+          avg.set(date, sum / count);
+        }
+        setBenchmarkByDate(avg);
+      })
+      .catch(() => {
+        if (!cancelled) setBenchmarkByDate(new Map());
+      });
+    return () => { cancelled = true; };
+  }, [id, perfPeriod]);
+
+  // Uporedni grafik: serija fonda (indeks 100) + benchmark (prosek svih fondova).
+  const comparisonData = useMemo(() => {
+    const base = performance[0]?.fundValue ?? 0;
+    if (base <= 0) return [];
+    return performance.map((p) => ({
+      date: p.date,
+      fundIndex: (p.fundValue / base) * 100,
+      benchmarkIndex: benchmarkByDate.get(p.date) ?? null,
+    }));
+  }, [performance, benchmarkByDate]);
 
   if (loading) {
     return (
@@ -394,6 +493,66 @@ export default function FundDetailsPage() {
         </CardContent>
       </Card>
 
+      {/* FE4 (7.2) — Metrike performansi (B12) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Metrike performansi
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {statsStatus === 'loading' ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/50" />
+              ))}
+            </div>
+          ) : statsStatus === 'unavailable' ? (
+            <p className="text-sm text-muted-foreground" data-testid="fund-stats-unavailable">
+              Metrike performansi trenutno nisu dostupne (B12 endpoint još nije aktivan).
+            </p>
+          ) : statsStatus === 'error' ? (
+            <p className="text-sm text-red-500" data-testid="fund-stats-error">
+              Greška pri učitavanju metrika. Pokušajte ponovo kasnije.
+            </p>
+          ) : (
+            <>
+              <div
+                className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+                data-testid="fund-stats-grid"
+              >
+                <MetricChip
+                  label="Godišnji prinos"
+                  value={stats?.annualizedReturnPercent ?? null}
+                  colored
+                />
+                <MetricChip
+                  label="Prinos / rizik"
+                  value={stats?.rewardToVariabilityRatio ?? null}
+                  suffix=""
+                />
+                <MetricChip
+                  label="Max pad (drawdown)"
+                  value={stats?.maxDrawdownPercent ?? null}
+                  colored
+                />
+                <MetricChip
+                  label="Volatilnost"
+                  value={stats?.volatilityPercent ?? null}
+                />
+              </div>
+              {stats && !stats.sufficientHistory && (
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  ⚠ Premalo istorijskih podataka ({stats.snapshotCount} snimaka) — metrike
+                  mogu biti nepouzdane.
+                </p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Performance Chart */}
       <Card>
         <CardHeader>
@@ -477,6 +636,97 @@ export default function FundDetailsPage() {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* FE4 (7.2) — Uporedni grafik: fond vs prosek svih fondova (indeks = 100 na početku perioda) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Poređenje sa prosekom fondova
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {comparisonData.length === 0 ? (
+            <div className="flex flex-col items-center py-12 text-muted-foreground">
+              <TrendingUp className="h-10 w-10 mb-3 opacity-30" />
+              <p>Nema podataka za poređenje u izabranom periodu</p>
+            </div>
+          ) : (
+            <div
+              className="bg-muted/20 dark:bg-slate-900/40 rounded-xl p-3"
+              data-testid="fund-comparison-chart"
+            >
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={comparisonData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.4 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(d: string) =>
+                      new Date(d).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit' })
+                    }
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.4 }}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={['auto', 'auto']}
+                    tickFormatter={(v: number) => v.toFixed(0)}
+                    width={48}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                    }}
+                    formatter={(value: unknown, name: unknown) => [
+                      typeof value === 'number' ? value.toFixed(2) : '—',
+                      name === 'fundIndex' ? 'Ovaj fond' : 'Prosek fondova',
+                    ]}
+                    labelFormatter={(label: unknown) =>
+                      new Date(String(label)).toLocaleDateString('sr-RS', {
+                        day: '2-digit', month: 'long', year: 'numeric',
+                      })
+                    }
+                  />
+                  <Legend
+                    formatter={(value) =>
+                      value === 'fundIndex' ? 'Ovaj fond' : 'Prosek svih fondova'
+                    }
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="fundIndex"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    dot={false}
+                    animationDuration={800}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="benchmarkIndex"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={false}
+                    connectNulls
+                    animationDuration={800}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                Indeks performansi — početak perioda = 100. Plavo: ovaj fond ·
+                narandžasto isprekidano: prosek svih fondova.
+              </p>
             </div>
           )}
         </CardContent>

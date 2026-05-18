@@ -1,37 +1,29 @@
 // ============================================================
-// TODO [FE4 - Dividende + statistika fondova + istorija OTC | Developer: Jovan Krunic]
+// FE4 — Statistika fondova (zadatak 7.2, Developer: Jovan Krunic)
 //
-// Tipovi za statistike i metrike performansi investicionih fondova.
-//
-// IMPLEMENTIRATI:
-//   - FundMetricsDto: {
-//       fundId: number,
-//       fundName: string,
-//       currencyCode: string,
-//       annualizedReturnPct: number,         // godisnji prinos u %
-//       rewardToVariabilityRatio: number,    // Sharpe-like ratio: (prinos - rf) / std
-//       maxDrawdownPct: number,              // maksimalni pad od vrha, negativna vrednost
-//       volatilityPct: number,               // godisnja volatilnost (std devijacija prinosa)
-//       totalReturnPct: number,              // ukupni prinos od osnivanja fonda u %
-//       calculatedAt: string,               // ISO datetime kada su metrike izracunate
-//     }
-//   - FundComparisonItemDto: {
-//       fundId: number,
-//       fundName: string,
-//       annualizedReturnPct: number,
-//       volatilityPct: number,
-//       rewardToVariabilityRatio: number,
-//       maxDrawdownPct: number,
-//       currentNav: number,                 // neto vrednost imovine fonda (net asset value)
-//       currencyCode: string,
-//     }
-//   - FundStatisticsFilterParams: {
-//       fromDate?: string,   // ISO date — pocetak perioda za obracun
-//       toDate?: string,     // ISO date — kraj perioda za obracun
-//     }
-//
-// Konvencija: pratiti postojecu `Savings` feature celinu kao sablon.
-// Spec: Zadaci_Frontend.pdf, FE4.
+// Tipovi odgovaraju B12 backend ugovoru (FundStatisticsDto / GET /funds/{id}/statistics).
 // ============================================================
 
-export {};
+/**
+ * Statisticke metrike performansi jednog investicionog fonda — odgovor sa
+ * GET /funds/{fundId}/statistics. Mapira se 1:1 iz BE FundStatisticsDto.
+ *
+ * Metrike su `null` kada nema dovoljno istorijskih snimaka da bi bile
+ * smislene (BE prag: MIN_SNAPSHOTS_REQUIRED = 30).
+ */
+export interface FundStatisticsDto {
+  fundId: number;
+  fundName: string;
+  /** Ukupan broj dnevnih snimaka vrednosti koriscenih za obracun. */
+  snapshotCount: number;
+  /** Anualizovani (godisnji) prinos u %. null ako nema dovoljno snimaka. */
+  annualizedReturnPercent: number | null;
+  /** Standardna devijacija mesecnih prinosa u %. null ako nema dovoljno tacaka. */
+  volatilityPercent: number | null;
+  /** Maksimalni pad od vrha do dna u % (negativna vrednost ili 0). null ako nema dovoljno. */
+  maxDrawdownPercent: number | null;
+  /** Sharpe-like racio: annualizedReturn / volatility. null ako volatilnost nije dostupna ili je 0. */
+  rewardToVariabilityRatio: number | null;
+  /** true ako je snapshotCount >= BE prag (dovoljno istorije za pouzdane metrike). */
+  sufficientHistory: boolean;
+}

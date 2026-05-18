@@ -344,6 +344,83 @@ const mockFundPositions = [
 // ============================================================
 //  FEATURE 1: Investicioni fondovi — Discovery (Issue #71 / jkrunic)
 // ============================================================
+// ============================================================
+//  FEATURE: Statistika fondova (FE4 — zadatak 7.2 / jkrunic)
+// ============================================================
+const mockFundStats = {
+  fundId: 1,
+  fundName: 'Alpha Growth Fund',
+  snapshotCount: 90,
+  annualizedReturnPercent: 12.34,
+  volatilityPercent: 4.2,
+  maxDrawdownPercent: -8.5,
+  rewardToVariabilityRatio: 2.94,
+  sufficientHistory: true,
+};
+
+describe('Mock C4: Statistika fondova (FE4 7.2)', () => {
+  it('S-FS1: Discovery prikazuje metričke kolone fondova', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/*/statistics', { body: mockFundStats }).as('stats');
+    cy.visit('/funds', { onBeforeLoad: setupClientSession });
+    cy.wait('@funds');
+    cy.contains('th', 'Godišnji prinos').should('be.visible');
+    cy.contains('th', 'Prinos/rizik').should('be.visible');
+    cy.contains('th', 'Max pad').should('be.visible');
+    cy.contains('th', 'Volatilnost').should('be.visible');
+  });
+
+  it('S-FS2: Discovery prikazuje vrednost metrike kad B12 vrati podatke', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/*/statistics', { body: mockFundStats }).as('stats');
+    cy.visit('/funds', { onBeforeLoad: setupClientSession });
+    cy.wait('@funds');
+    cy.wait('@stats');
+    cy.contains('12,34%').should('exist');
+  });
+
+  it('S-FS3: Discovery prikazuje poruku kad B12 vrati 404', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/*/statistics', { statusCode: 404, body: {} }).as('stats');
+    cy.visit('/funds', { onBeforeLoad: setupClientSession });
+    cy.wait('@funds');
+    cy.contains('Metrike fondova trenutno nisu dostupne').should('be.visible');
+  });
+
+  it('S-FS4: Detalji fonda prikazuju karticu Metrike performansi', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/1', { body: mockFundDetail }).as('fundDetail');
+    cy.intercept('GET', '/api/funds/*/performance*', { body: mockPerformance }).as('perf');
+    cy.intercept('GET', '/api/funds/*/statistics', { body: mockFundStats }).as('stats');
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.wait('@stats');
+    cy.contains('Metrike performansi').should('be.visible');
+    cy.get('[data-testid="fund-stats-grid"]').should('exist');
+  });
+
+  it('S-FS5: Detalji fonda prikazuju poruku kad B12 metrike vrate 404', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/1', { body: mockFundDetail }).as('fundDetail');
+    cy.intercept('GET', '/api/funds/*/performance*', { body: mockPerformance }).as('perf');
+    cy.intercept('GET', '/api/funds/*/statistics', { statusCode: 404, body: {} }).as('stats');
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.get('[data-testid="fund-stats-unavailable"]').should('exist');
+  });
+
+  it('S-FS6: Detalji fonda prikazuju uporedni grafik', () => {
+    cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');
+    cy.intercept('GET', '/api/funds/1', { body: mockFundDetail }).as('fundDetail');
+    cy.intercept('GET', '/api/funds/*/performance*', { body: mockPerformance }).as('perf');
+    cy.intercept('GET', '/api/funds/*/statistics', { body: mockFundStats }).as('stats');
+    cy.visit('/funds/1', { onBeforeLoad: setupClientSession });
+    cy.wait('@fundDetail');
+    cy.contains('Poređenje sa prosekom fondova').should('be.visible');
+    cy.get('[data-testid="fund-comparison-chart"]').should('exist');
+  });
+});
+
 describe('Mock C4: Investicioni fondovi - Discovery', () => {
   beforeEach(() => {
     cy.intercept('GET', '/api/funds*', { body: mockFunds }).as('funds');

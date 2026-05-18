@@ -7,6 +7,7 @@ import { renderWithProviders } from '@/test/test-utils';
 const mockNavigate = vi.fn();
 const mockUseAuth = vi.fn();
 const mockListFunds = vi.fn();
+const mockGetFundStatistics = vi.fn();
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -27,6 +28,12 @@ vi.mock('@/context/AuthContext', async (importOriginal) => {
 vi.mock('@/services/investmentFundService', () => ({
   default: {
     list: (...args: unknown[]) => mockListFunds(...args),
+  },
+}));
+
+vi.mock('@/services/fundStatisticsService', () => ({
+  default: {
+    getFundStatistics: (...args: unknown[]) => mockGetFundStatistics(...args),
   },
 }));
 
@@ -60,11 +67,23 @@ const FUNDS = [
   },
 ];
 
+const STATS = {
+  fundId: 1,
+  fundName: 'Alpha Growth',
+  snapshotCount: 90,
+  annualizedReturnPercent: 12.34,
+  volatilityPercent: 4.2,
+  maxDrawdownPercent: -8.5,
+  rewardToVariabilityRatio: 2.94,
+  sufficientHistory: true,
+};
+
 describe('FundsDiscoveryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({ isSupervisor: false });
     mockListFunds.mockResolvedValue(FUNDS);
+    mockGetFundStatistics.mockResolvedValue(STATS);
   });
 
   it('prikazuje listu fondova nakon ucitavanja', async () => {
@@ -151,5 +170,40 @@ describe('FundsDiscoveryPage', () => {
     // Beta ima negativan profit (-75000), trazimo .text-red-500 na njegovom row-u
     const betaRow = screen.getByText('Beta Yield').closest('tr')!;
     expect(betaRow.querySelector('.text-red-500')).toBeTruthy();
+  });
+
+  // --- FE4 (7.2) — metrike fondova ---
+
+  it('prikazuje nove kolone metrika fondova', async () => {
+    renderWithProviders(<FundsDiscoveryPage />);
+    await waitFor(() => expect(screen.getByText('Alpha Growth')).toBeInTheDocument());
+    expect(screen.getByText('Godišnji prinos')).toBeInTheDocument();
+    expect(screen.getByText('Prinos/rizik')).toBeInTheDocument();
+    expect(screen.getByText('Max pad')).toBeInTheDocument();
+    expect(screen.getByText('Volatilnost')).toBeInTheDocument();
+  });
+
+  it('prikazuje vrednosti metrika kad su statistike dostupne', async () => {
+    renderWithProviders(<FundsDiscoveryPage />);
+    await waitFor(() => expect(screen.getByText('Alpha Growth')).toBeInTheDocument());
+    // STATS.annualizedReturnPercent = 12.34 -> "12,34%" (sr-RS)
+    await waitFor(() =>
+      expect(screen.getAllByText(/12,34\s*%/).length).toBeGreaterThan(0),
+    );
+  });
+
+  it('prikazuje poruku kad B12 metrike nisu dostupne (404)', async () => {
+    mockGetFundStatistics.mockRejectedValue({ response: { status: 404 } });
+    renderWithProviders(<FundsDiscoveryPage />);
+    await screen.findByText(/Metrike fondova trenutno nisu dostupne/i);
+  });
+
+  it('klik na metričku kolonu (Godišnji prinos) sortira bez rušenja prikaza', async () => {
+    renderWithProviders(<FundsDiscoveryPage />);
+    await waitFor(() => expect(screen.getByText('Alpha Growth')).toBeInTheDocument());
+    const header = screen.getByText('Godišnji prinos').closest('th')!;
+    await userEvent.click(header);
+    expect(screen.getByText('Alpha Growth')).toBeInTheDocument();
+    expect(screen.getByText('Beta Yield')).toBeInTheDocument();
   });
 });

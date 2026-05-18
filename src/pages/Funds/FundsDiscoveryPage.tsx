@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import investmentFundService from '@/services/investmentFundService';
+import fundStatisticsService from '@/services/fundStatisticsService';
 import type { InvestmentFundSummary } from '@/types/celina4';
+import type { FundStatisticsDto } from '@/types/fundStatistics';
 import { formatAmount } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,36 +29,73 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-/*
- * TODO [FE4 - Statistika fondova | Developer: Jovan Krunic]
- *
- * Prosiriti tabelu fondova dodatnim kolonama sa metrikama i omoguciti sortiranje:
- *
- *  1. Novi servis fundStatisticsService (src/services/fundStatisticsService.ts):
- *     - getFundStatistics(fundId): GET /funds/{id}/statistics
- *       vraca { annualizedReturn: number, sharpeRatio: number,
- *               maxDrawdown: number, volatility: number }.
- *     - getAllFundStatistics(): GET /funds/statistics — batch endpoint za sve fondove
- *       (jedan poziv umesto N poziva u petlji).
- *
- *  2. Nove kolone u tabeli (dodati u TableHeader i TableRow):
- *     - "Anualizovani prinos (%)" — formatovati sa 2 decimale + % suffix;
- *     - "Prinos/Rizik (Sharpe)" — Sharpe ratio, 2 decimale;
- *     - "Max Drawdown (%)" — negativna vrednost, prikazati crveno;
- *     - "Volatilnost (%)" — prikazati sa 2 decimale.
- *
- *  3. Sortiranje — prosiriti SortField tip novim vrednostima:
- *     'annualizedReturn' | 'sharpeRatio' | 'maxDrawdown' | 'volatility'
- *     i dodati klik na zaglavlje kolone (ArrowUpDown/ArrowUp/ArrowDown ikona).
- *
- *  4. Ucitavanje: fetchovati statistike paralelno sa listom fondova (Promise.all)
- *     i spojiti podatke po fundId pre renderovanja.
- *
- *  Tip FundStatistics dodati u src/types/celina4.ts.
- */
+// ============================================================
+// FE4 (7.2) — Statistika fondova (Developer: Jovan Krunic)
+// Tabela fondova prosirena metrikama performansi (B12). Za svaki fond se
+// paralelno dohvata GET /funds/{id}/statistics; dok B12 nije dostupan (404)
+// ili nema dovoljno istorije, metrike se prikazuju kao „—".
+// ============================================================
 
-type SortField = 'name' | 'fundValue' | 'profit' | 'minimumContribution';
+/** Sortabilne metricke kolone -> odgovarajuce polje u FundStatisticsDto. */
+const METRIC_KEY = {
+  annualizedReturn: 'annualizedReturnPercent',
+  rewardToVariability: 'rewardToVariabilityRatio',
+  maxDrawdown: 'maxDrawdownPercent',
+  volatility: 'volatilityPercent',
+} as const;
+
+type MetricSortField = keyof typeof METRIC_KEY;
+type SortField =
+  | 'name'
+  | 'fundValue'
+  | 'profit'
+  | 'minimumContribution'
+  | MetricSortField;
 type SortDirection = 'asc' | 'desc';
+
+/** Celija tabele za jednu metriku fonda; `null` (nedovoljno istorije / B12 nedostupan) -> „—". */
+function MetricCell({
+  value,
+  suffix = '%',
+  colored = false,
+}: {
+  value: number | null;
+  suffix?: string;
+  colored?: boolean;
+}) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return <TableCell className="text-right text-muted-foreground">—</TableCell>;
+  }
+  const formatted = value.toLocaleString('sr-RS', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const colorClass = colored ? (value >= 0 ? 'text-emerald-500' : 'text-red-500') : '';
+  return (
+    <TableCell className={`text-right font-mono tabular-nums ${colorClass}`}>
+      {formatted}
+      {suffix}
+    </TableCell>
+  );
+}
+
+/** Ikonica smera sortiranja u zaglavlju kolone tabele. */
+function SortIcon({
+  field,
+  activeField,
+  direction,
+}: {
+  field: SortField;
+  activeField: SortField;
+  direction: SortDirection;
+}) {
+  if (activeField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+  return direction === 'asc' ? (
+    <ArrowUp className="h-3 w-3 ml-1" />
+  ) : (
+    <ArrowDown className="h-3 w-3 ml-1" />
+  );
+}
 
 export default function FundsDiscoveryPage() {
   const navigate = useNavigate();
@@ -68,6 +107,10 @@ export default function FundsDiscoveryPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // FE4 (7.2) — metrike fondova, keširane po fundId.
+  const [fundStats, setFundStats] = useState<Record<number, FundStatisticsDto>>({});
+  // true kad je bar jedan ciklus dohvatanja metrika završen (za „nedostupno" poruku).
+  const [statsChecked, setStatsChecked] = useState(false);
   // Numericki filteri (min/max) — string state za UX (prazno polje = bez filtera).
   const [minContribution, setMinContribution] = useState('');
   const [maxContribution, setMaxContribution] = useState('');
@@ -103,10 +146,13 @@ export default function FundsDiscoveryPage() {
   const fetchFunds = useCallback(async () => {
     setLoading(true);
     try {
+      // Metricke kolone BE ne zna da sortira — za njih ne saljemo sort param,
+      // sortiranje tih kolona radi client-side `sortedFunds`.
+      const isMetricSort = sortBy in METRIC_KEY;
       const result = await investmentFundService.list({
         search: debouncedSearch || undefined,
-        sort: sortBy,
-        direction: sortDirection,
+        sort: isMetricSort ? undefined : sortBy,
+        direction: isMetricSort ? undefined : sortDirection,
         minContribution: parseNum(debouncedFilters.minContribution),
         maxContribution: parseNum(debouncedFilters.maxContribution),
         minFundValue: parseNum(debouncedFilters.minFundValue),
@@ -124,6 +170,40 @@ export default function FundsDiscoveryPage() {
   }, [debouncedSearch, sortBy, sortDirection, debouncedFilters]);
 
   useEffect(() => { fetchFunds(); }, [fetchFunds]);
+
+  // FE4 (7.2) — kad se lista fondova promeni, paralelno dohvati metrike za sve.
+  // Promise.allSettled: pad jednog poziva (npr. 404 dok B12 nije gotov) ne ruši ostale.
+  useEffect(() => {
+    // Nema fondova -> nema šta da se dohvata. Stari fundStats je bezopasan
+    // (nema redova da ga koriste), pa ga ne diramo — izbegava setState u efektu.
+    if (funds.length === 0) return;
+    let cancelled = false;
+    void Promise.allSettled(
+      funds.map((f) => fundStatisticsService.getFundStatistics(f.id)),
+    ).then((results) => {
+      if (cancelled) return;
+      const map: Record<number, FundStatisticsDto> = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') map[funds[i].id] = r.value;
+      });
+      setFundStats(map);
+      setStatsChecked(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [funds]);
+
+  // Metricka vrednost fonda za sortiranje; null ako stats nema ili metrika nije izracunata.
+  const metricValue = useCallback(
+    (fundId: number, field: MetricSortField): number | null => {
+      const stats = fundStats[fundId];
+      if (!stats) return null;
+      const v = stats[METRIC_KEY[field]];
+      return typeof v === 'number' ? v : null;
+    },
+    [fundStats],
+  );
 
   // Client-side sort fallback (in case backend doesn't sort)
   const sortedFunds = useMemo(() => {
@@ -143,11 +223,24 @@ export default function FundsDiscoveryPage() {
         case 'minimumContribution':
           cmp = a.minimumContribution - b.minimumContribution;
           break;
+        case 'annualizedReturn':
+        case 'rewardToVariability':
+        case 'maxDrawdown':
+        case 'volatility': {
+          const av = metricValue(a.id, sortBy);
+          const bv = metricValue(b.id, sortBy);
+          // Fondovi bez metrike uvek idu na kraj, nezavisno od smera sortiranja.
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+          cmp = av - bv;
+          break;
+        }
       }
       return sortDirection === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [funds, sortBy, sortDirection]);
+  }, [funds, sortBy, sortDirection, metricValue]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -156,13 +249,6 @@ export default function FundsDiscoveryPage() {
       setSortBy(field);
       setSortDirection('asc');
     }
-  };
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
-    return sortDirection === 'asc'
-      ? <ArrowUp className="h-3 w-3 ml-1" />
-      : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
   return (
@@ -270,6 +356,12 @@ export default function FundsDiscoveryPage() {
               )}
             </div>
           ) : (
+            <div className="overflow-x-auto">
+              {statsChecked && funds.length > 0 && Object.keys(fundStats).length === 0 && (
+                <p className="px-6 pt-4 text-xs text-muted-foreground">
+                  Metrike fondova trenutno nisu dostupne (B12 endpoint još nije aktivan).
+                </p>
+              )}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -279,7 +371,7 @@ export default function FundsDiscoveryPage() {
                   >
                     <div className="flex items-center">
                       Naziv
-                      <SortIcon field="name" />
+                      <SortIcon field="name" activeField={sortBy} direction={sortDirection} />
                     </div>
                   </TableHead>
                   <TableHead className="hidden md:table-cell">Opis</TableHead>
@@ -289,7 +381,7 @@ export default function FundsDiscoveryPage() {
                   >
                     <div className="flex items-center justify-end">
                       Min. ulog
-                      <SortIcon field="minimumContribution" />
+                      <SortIcon field="minimumContribution" activeField={sortBy} direction={sortDirection} />
                     </div>
                   </TableHead>
                   <TableHead
@@ -298,7 +390,7 @@ export default function FundsDiscoveryPage() {
                   >
                     <div className="flex items-center justify-end">
                       Vrednost
-                      <SortIcon field="fundValue" />
+                      <SortIcon field="fundValue" activeField={sortBy} direction={sortDirection} />
                     </div>
                   </TableHead>
                   <TableHead
@@ -307,7 +399,47 @@ export default function FundsDiscoveryPage() {
                   >
                     <div className="flex items-center justify-end">
                       Profit
-                      <SortIcon field="profit" />
+                      <SortIcon field="profit" activeField={sortBy} direction={sortDirection} />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => handleSort('annualizedReturn')}
+                    title="Anualizovani (godišnji) prinos"
+                  >
+                    <div className="flex items-center justify-end">
+                      Godišnji prinos
+                      <SortIcon field="annualizedReturn" activeField={sortBy} direction={sortDirection} />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => handleSort('rewardToVariability')}
+                    title="Odnos prinosa i rizika (Sharpe-like) — viši je bolji"
+                  >
+                    <div className="flex items-center justify-end">
+                      Prinos/rizik
+                      <SortIcon field="rewardToVariability" activeField={sortBy} direction={sortDirection} />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => handleSort('maxDrawdown')}
+                    title="Maksimalni pad vrednosti od vrha do dna"
+                  >
+                    <div className="flex items-center justify-end">
+                      Max pad
+                      <SortIcon field="maxDrawdown" activeField={sortBy} direction={sortDirection} />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none text-right"
+                    onClick={() => handleSort('volatility')}
+                    title="Volatilnost — standardna devijacija mesečnih prinosa"
+                  >
+                    <div className="flex items-center justify-end">
+                      Volatilnost
+                      <SortIcon field="volatility" activeField={sortBy} direction={sortDirection} />
                     </div>
                   </TableHead>
                 </TableRow>
@@ -354,10 +486,15 @@ export default function FundsDiscoveryPage() {
                         </span>
                       </div>
                     </TableCell>
+                    <MetricCell value={metricValue(fund.id, 'annualizedReturn')} colored />
+                    <MetricCell value={metricValue(fund.id, 'rewardToVariability')} suffix="" />
+                    <MetricCell value={metricValue(fund.id, 'maxDrawdown')} colored />
+                    <MetricCell value={metricValue(fund.id, 'volatility')} />
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
